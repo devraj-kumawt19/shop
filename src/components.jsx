@@ -63,14 +63,14 @@ export function StatusMessage({ children, tone = "info" }) {
   return <div className={`status-message status-${tone}`} role={tone === "error" ? "alert" : "status"}>{children}</div>;
 }
 
-export function ProductGrid({ products, loading, error, emptyMessage = "Nothing here just yet." }) {
+export function ProductGrid({ products, loading, error, showError = true, emptyMessage = "Nothing here just yet." }) {
   if (loading) return <div className="loading-grid">{Array.from({ length: 8 }, (_, index) => <div className="skeleton-card" key={index} />)}</div>;
   return (
     <>
-      {error && <StatusMessage>{error}</StatusMessage>}
+      {error && showError && <StatusMessage tone={error.startsWith("Demo") ? "info" : "error"}>{error}</StatusMessage>}
       {products.length
         ? <div className="product-grid">{products.map((product) => <ProductCard key={product._id} product={product} />)}</div>
-        : <div className="empty-state"><span>✳</span><h2>{emptyMessage}</h2><p>Try another search or browse all the good things.</p><Link className="button button-dark" to="/products">Explore the shop</Link></div>}
+        : error ? null : <div className="empty-state"><span>✳</span><h2>{emptyMessage}</h2><p>Try another search or browse all the good things.</p><Link className="button button-dark" to="/products">Explore the shop</Link></div>}
     </>
   );
 }

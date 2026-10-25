@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, ChevronRight, Heart, Minus, PackageCheck, Plus, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Star, Tag, Truck } from "lucide-react";
 import api, { getErrorMessage } from "./api.js";
@@ -15,7 +15,7 @@ const subtotalFor = (cart) => cart.reduce((sum, item) => sum + Number(item.produ
 
 export function HomePage() {
   const money = useMoney();
-  const { settings } = useShop();
+  const { settings, settingsError } = useShop();
   const { products, loading, error } = useProducts({ featured: "true", limit: "8" });
   const saleProducts = useProducts({ sale: "true", limit: "4" });
   const collections = useCategories();
@@ -48,7 +48,7 @@ export function HomePage() {
           <span className="showcase-caption"><span /> CURATED FOR THE WAY YOU LIVE</span>
         </div>
       </section>
-      {settings.saleEnabled && (saleProducts.loading || saleProducts.products.length > 0) && <Reveal className="sale-section page-width"><div className="section-heading"><div><span className="eyebrow"><Tag size={14} /> THE SALE EDIT</span><h2>{settings.saleTitle}</h2><p>{settings.saleDescription}</p></div><Link className="button button-sale" to="/products?sale=true">All sale finds <ArrowRight size={16} /></Link></div><ProductGrid products={saleProducts.products} loading={saleProducts.loading} error={saleProducts.error} /></Reveal>}
+      {settings.saleEnabled && (saleProducts.loading || saleProducts.products.length > 0) && <Reveal className="sale-section page-width"><div className="section-heading"><div><span className="eyebrow"><Tag size={14} /> THE SALE EDIT</span><h2>{settings.saleTitle}</h2><p>{settings.saleDescription}</p></div><Link className="button button-sale" to="/products?sale=true">All sale finds <ArrowRight size={16} /></Link></div><ProductGrid products={saleProducts.products} loading={saleProducts.loading} error={saleProducts.error} showError={saleProducts.error !== settingsError} /></Reveal>}
       <section className="benefit-strip">
         <div><Truck /><span><b>Free shipping over {money(settings.freeShippingThreshold)}</b><small>Good things, delivered</small></span></div>
         <div><ShieldCheck /><span><b>Good things, chosen well</b><small>Thoughtful quality, every time</small></span></div>
@@ -60,12 +60,12 @@ export function HomePage() {
         <div className="category-grid">
           {storefrontCategories.map((category, index) => <Link to={`/categories/${category.slug}`} className={`category-tile ${category.tone || ""}`} key={category.slug}><div className="category-image"><img src={category.image || categories.find((item) => item.slug === category.slug)?.image || ""} alt={category.name} loading="lazy" /><span className="collection-number">0{index + 1}</span></div><div className="category-copy"><small>{["A SPACE TO BE YOU", "YOUR DAILY SOUNDTRACK", "GO PLACES, BEAUTIFULLY", "YOUR MOMENT TO RESET"][index % 4]}</small><h3>{category.name}</h3><span className="category-arrow"><ArrowRight size={18} /></span></div></Link>)}
         </div>
-        {collections.error && <StatusMessage>{collections.error}</StatusMessage>}
+        {collections.error && collections.error !== settingsError && <StatusMessage tone={collections.error.startsWith("Demo") ? "info" : "error"}>{collections.error}</StatusMessage>}
       </Reveal>
       <Reveal className="featured-section page-width">
         <div className="section-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> THE GOOD STUFF, ALL IN ONE PLACE</span><h2>Meet your next <em>favorite.</em></h2><p>Everyday essentials with a little something extra.</p></div><Link className="subtle-link" to="/products">Shop all finds <ArrowRight size={16} /></Link></div>
         <div className="collection-tabs" role="group" aria-label="Filter featured products by collection"><button type="button" aria-pressed={!activeCollection} className={!activeCollection ? "active" : ""} onClick={() => setActiveCollection("")}><Sparkles size={14} /> All favorites</button>{storefrontCategories.map((category) => <button type="button" key={category.slug} aria-pressed={activeCollection === category.slug} className={activeCollection === category.slug ? "active" : ""} onClick={() => setActiveCollection(category.slug)}>{category.name}</button>)}</div>
-        <ProductGrid products={featuredProducts} loading={loading} error={error} emptyMessage="New favorites are on their way." />
+        <ProductGrid products={featuredProducts} loading={loading} error={error} showError={error !== settingsError} emptyMessage="New favorites are on their way." />
       </Reveal>
       <Reveal className="editorial-banner page-width">
         <div><span className="eyebrow"><Sparkles size={15} /> LITTLE UPGRADES. BIG EVERYDAY ENERGY.</span><h2>A better everyday<br />starts with <em>you.</em></h2><p>Slow mornings. Fresh spaces. Your favorite soundtrack. Find the little things that make life feel a little more yours.</p><Link to="/products" className="button button-light">Discover something good <ArrowRight size={17} /></Link><span className="editorial-note"><Check size={14} /> Considered details. Lasting favorites.</span></div>
@@ -77,29 +77,47 @@ export function HomePage() {
 
 export function ProductsPage() {
   const money = useMoney();
+  const { settingsError } = useShop();
   const location = useLocation();
+  const navigate = useNavigate();
   const { categories: storefrontCategories } = useCategories();
   const { category } = useParams();
   const query = new URLSearchParams(location.search);
   const search = query.get("search") || "";
+  const page = Math.max(1, Math.floor(Number(query.get("page")) || 1));
   const [sort, setSort] = useState("featured");
   const [categoryFilter, setCategoryFilter] = useState(category || "");
-  const { products, loading, error } = useProducts({ category: categoryFilter, search, sale: query.get("sale") === "true" ? "true" : "", limit: "100" });
+  const { products, loading, error, pagination } = useProducts({
+    category: categoryFilter, search, sale: query.get("sale") === "true" ? "true" : "",
+    sort, page: String(page), limit: "24",
+  });
   useEffect(() => setCategoryFilter(category || ""), [category]);
-  const sorted = useMemo(() => [...products].sort((a, b) => {
-    if (sort === "price-low") return a.price - b.price;
-    if (sort === "price-high") return b.price - a.price;
-    if (sort === "rating") return b.rating - a.rating;
-    return Number(b.featured) - Number(a.featured);
-  }), [products, sort]);
+  useEffect(() => {
+    if (loading || error || !pagination.pages || page <= pagination.pages) return;
+    const nextQuery = new URLSearchParams(location.search);
+    nextQuery.set("page", String(pagination.pages));
+    navigate(`${location.pathname}?${nextQuery}`, { replace: true });
+  }, [error, loading, location.pathname, location.search, navigate, page, pagination.pages]);
+  function goToPage(nextPage) {
+    const nextQuery = new URLSearchParams(location.search);
+    if (nextPage === 1) nextQuery.delete("page");
+    else nextQuery.set("page", String(nextPage));
+    const queryString = nextQuery.toString();
+    navigate(`${location.pathname}${queryString ? `?${queryString}` : ""}`);
+  }
   const title = query.get("sale") === "true" ? "A little sale. A lot to love." : category ? storefrontCategories.find((item) => item.slug === category)?.name || "Shop by category" : search ? `Results for “${search}”` : "A few good finds.";
   return (
     <main id="main-content" className="catalog-page page-width">
       <div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><span>{category ? "Collections" : "Shop"}</span></div>
       <div className="catalog-intro"><span className="eyebrow">{search ? "A GOOD FIND IS CLOSER THAN YOU THINK" : "THOUGHTFULLY PICKED FOR REAL LIFE"}</span><h1>{title}</h1><p>Well-made essentials, lovely little upgrades, and pieces you’ll be glad to have around.</p></div>
-      <div className="catalog-toolbar"><span>{loading ? "Finding good things..." : `${products.length} thoughtful finds`}</span><label><SlidersHorizontal size={15} /><span>Sort by</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="rating">Top rated</option></select></label></div>
+      <div className="catalog-toolbar"><span>{loading ? "Finding good things..." : error || settingsError ? "Catalog unavailable" : `${pagination.total} thoughtful ${pagination.total === 1 ? "find" : "finds"}`}</span><label><SlidersHorizontal size={15} /><span>Sort by</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="rating">Top rated</option></select></label></div>
       {!category && <div className="filter-pills"><Link className={!categoryFilter ? "active" : ""} to="/products">All finds</Link>{storefrontCategories.map((item) => <Link className={categoryFilter === item.slug ? "active" : ""} key={item.slug} to={`/categories/${item.slug}`}>{item.name}</Link>)}</div>}
-      <ProductGrid products={sorted} loading={loading} error={error} emptyMessage="No finds for that search." />
+      <ProductGrid products={products} loading={loading} error={error || settingsError} showError={error !== settingsError} emptyMessage="No finds for that search." />
+      {!error && pagination.pages > 1 && <nav className="catalog-pagination" aria-label="Product pages">
+        <button type="button" disabled={loading || page <= 1} onClick={() => goToPage(page - 1)}>Previous</button>
+        <span>Page {page} of {pagination.pages}</span>
+        <button type="button" disabled={loading || page >= pagination.pages} onClick={() => goToPage(page + 1)}>Next</button>
+      </nav>}
     </main>
   );
 }
@@ -108,11 +126,11 @@ export function ProductDetailPage() {
   const money = useMoney();
   const { id } = useParams();
   const { product, loading, error } = useProduct(id);
-  const { addToCart, wishlist, toggleWishlist, settings } = useShop();
+  const { addToCart, wishlist, toggleWishlist, settings, settingsError } = useShop();
   const [quantity, setQuantity] = useState(1);
   const recommendations = useProducts({ featured: "true" });
   if (loading) return <main id="main-content" className="page-width detail-loading"><div className="skeleton-card" /><div className="skeleton-card" /></main>;
-  if (!product) return <main id="main-content" className="page-width empty-state"><h1>We couldn’t find that one.</h1><Link className="button button-dark" to="/products">Back to the shop</Link></main>;
+  if (!product) return <main id="main-content" className="page-width empty-state">{error && error !== settingsError ? <StatusMessage tone="error">{error}</StatusMessage> : !settingsError && <h1>We couldn’t find that one.</h1>}<Link className="button button-dark" to="/products">Back to the shop</Link></main>;
   const isSaved = wishlist.some((item) => item._id === product._id);
   return (
     <main id="main-content" className="page-width product-detail-page">
@@ -122,7 +140,7 @@ export function ProductDetailPage() {
         <div className="detail-image"><img src={product.image} alt={product.name} /><span className="detail-image-label">A GOOD FIND, UP CLOSE</span></div>
         <div className="detail-info"><span className="eyebrow">{product.category} / THOUGHTFULLY SELECTED</span><h1>{product.name}</h1><div className="detail-rating"><span><Star size={14} fill="currentColor" /> {Number(product.rating).toFixed(1)}</span><span>{product.reviewCount || 0} happy reviews</span></div><div className="detail-price">{money(product.price)} {product.compareAtPrice > product.price && <del>{money(product.compareAtPrice)}</del>}</div><p className="detail-description">{product.description}</p><div className={product.stock > 0 ? "stock-line" : "stock-line stock-unavailable"}><span className="stock-dot" /> {product.stock > 0 ? `In stock — ${product.stock} ready to ship` : "Currently out of stock"}</div><div className="purchase-row"><div className="quantity-control"><button aria-label="Decrease quantity" disabled={product.stock < 1} onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={14} /></button><span>{quantity}</span><button aria-label="Increase quantity" disabled={product.stock < 1} onClick={() => setQuantity(Math.min(product.stock || 1, quantity + 1))}><Plus size={14} /></button></div><button className="button button-dark add-detail" disabled={product.stock < 1} onClick={() => addToCart(product, quantity)}>{product.stock > 0 ? <>Add to bag <ShoppingBag size={17} /></> : "Out of stock"}</button><button className={isSaved ? "detail-heart is-favorite" : "detail-heart"} aria-label={isSaved ? "Remove from wishlist" : "Add to wishlist"} onClick={() => toggleWishlist(product)}><Heart size={19} fill={isSaved ? "currentColor" : "none"} /></button></div><div className="detail-promises"><div><Truck size={18} /><span><b>Free shipping over {money(settings.freeShippingThreshold)}</b><small>Delivered with care</small></span></div><div><ShieldCheck size={18} /><span><b>30-day easy returns</b><small>Love it or send it back</small></span></div></div></div>
       </div>
-      <section className="related-section"><div className="section-heading"><div><span className="eyebrow">MORE TO LOVE</span><h2>Good together.</h2></div><Link className="subtle-link" to="/products">Shop all <ArrowRight size={15} /></Link></div><ProductGrid products={recommendations.products.filter((item) => item._id !== product._id).slice(0, 4)} loading={recommendations.loading} error={recommendations.error} /></section>
+      <section className="related-section"><div className="section-heading"><div><span className="eyebrow">MORE TO LOVE</span><h2>Good together.</h2></div><Link className="subtle-link" to="/products">Shop all <ArrowRight size={15} /></Link></div><ProductGrid products={recommendations.products.filter((item) => item._id !== product._id).slice(0, 4)} loading={recommendations.loading} error={recommendations.error} showError={recommendations.error !== settingsError} /></section>
     </main>
   );
 }

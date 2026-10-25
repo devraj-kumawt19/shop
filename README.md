@@ -75,9 +75,11 @@ npm run build
 npm run preview
 ```
 
-The Vercel configuration rewrites client-side routes to the SPA entry point. Configure `VITE_API_URL` in Vercel to the deployed Render API base URL ending in `/api`.
+The Express API is a separate Render service (`render.yaml`); Vercel only hosts the React SPA. The SPA rewrite deliberately excludes `/api/*`, so a missing API configuration cannot silently return `index.html` for JSON requests. The production frontend requires `VITE_API_URL` in Vercel, set to the full HTTPS Render API URL ending in `/api` (for example, `https://your-service.onrender.com/api`). Do not set it to `/api` in Vercel. The local development default remains `/api` and Vite proxies it to `http://localhost:5000`.
 
-For Render, deploy the included `render.yaml` (or create a Node web service with root directory `server`, build command `npm install`, start command `npm start`, and health check `/api/health`). Set `MONGO_URI`, `FRONTEND_URL` to the deployed Vercel origin, and a random `JWT_SECRET` in the Render service environment. Seed the Atlas catalog with `npm run seed` from the `server` directory in a trusted local environment; create the administrator using the documented script. Restrict the Atlas network access list to the deployment environment where possible.
+In Vercel, set `VITE_API_URL` for Production and any Preview environments that should use the API, then redeploy because Vite embeds this value at build time. In Render, deploy the included `render.yaml` (or create a Node web service with root directory `server`, build command `npm install`, start command `npm start`, and health check `/api/health`). Set `MONGO_URI`, `JWT_SECRET` (random, at least 32 characters), and `FRONTEND_URL` (the exact deployed Vercel origin, such as `https://shop-sand-gamma.vercel.app`) in the Render service environment. Seed the Atlas catalog with `npm --prefix server run seed` from the project root in a trusted local environment; the seed script inserts missing sample products/categories without overwriting existing entries. Create the administrator using the documented script. Restrict the Atlas network access list to the deployment environment where possible.
+
+Optional Render API variables: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` enable online payments; `RESEND_API_KEY` and `RESEND_FROM` enable email; `ORDER_NOTIFICATION_EMAIL` enables owner order notifications. Admin account provisioning variables are only needed when running the one-time create-admin/create-super-admin scripts. Never set API secrets in Vercel's frontend environment; only `VITE_API_URL` is needed there.
 
 ## Main routes
 

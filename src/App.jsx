@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ShopProvider, useShop } from "./ShopContext.jsx";
-import { SiteFooter } from "./components.jsx";
+import { SiteFooter, StatusMessage } from "./components.jsx";
 import Header from "./Header.jsx";
 import PageTransition from "./PageTransition.jsx";
 import { useCategories } from "./hooks/useProducts.js";
@@ -50,11 +50,13 @@ function AppRoutes() {
   const pathname = useLocation().pathname;
   const controlPanel = pathname === "/super-admin";
   const authPage = pathname === "/login" || pathname === "/register";
+  const { settingsError } = useShop();
   return (
     <>
       <RouteTracker />
       <a className="skip-link" href="#main-content">Skip to content</a>
       {!controlPanel && !authPage && <Header />}
+      {!import.meta.env.DEV && settingsError && <div className="page-width app-api-error"><StatusMessage tone="error">{settingsError}</StatusMessage></div>}
       <Toast />
       <PageTransition>
       <Routes>

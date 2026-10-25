@@ -61,6 +61,19 @@ test("blocked sessions cannot access profile, admin or super admin APIs", async 
   for (const path of ["/auth/me", "/admin/products", "/super-admin/settings"]) assert.equal((await request(path, { key: "blocked" })).status, 401);
   assert.equal((await request("/auth/login", { method: "POST", body: { email: "blocked@example.test", password: "irrelevant-password" } })).status, 401);
 });
+test("login verifies the password and returns a signed bearer token", async () => {
+  users[ids.customer].checkPassword = async (password) => password === "correct-password";
+  const result = await request("/auth/login", { method: "POST", body: { email: "CUSTOMER@example.test", password: "correct-password" } });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.user, { id: ids.customer, name: "customer", email: "customer@example.test", role: "customer" });
+  assert.equal(result.body.user.password, undefined);
+  const payload = jwt.verify(result.body.token, process.env.JWT_SECRET);
+  assert.equal(payload.sub, ids.customer);
+  assert.equal(payload.role, "customer");
+  assert.ok(Number.isInteger(payload.iat));
+  assert.ok(Number.isInteger(payload.exp));
+  assert.equal((await request("/auth/login", { method: "POST", body: { email: "customer@example.test", password: "wrong-password" } })).status, 401);
+});
 test("public registration cannot inject super admin role or blocked status", async () => {
   const result = await request("/auth/register", { method: "POST", body: { name: "Test User", email: "new@example.test", password: "example-password-123", role: "superadmin", isActive: false } });
   assert.equal(result.status, 201);

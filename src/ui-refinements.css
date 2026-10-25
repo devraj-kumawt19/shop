@@ -22,6 +22,10 @@
 .product-card:hover .product-visual img { filter: saturate(1.04); }
 .category-image { background: #f0f5fc; }
 .catalog-toolbar { padding-bottom: 9px; margin-bottom: 15px; }
+.catalog-pagination { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 32px; color: #71809a; font-size: 12px; }
+.catalog-pagination button { min-height: 38px; padding: 0 15px; border: 1px solid #dce5f3; border-radius: 8px; background: #fff; color: var(--blue); }
+.catalog-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+.app-api-error { padding-top: 12px; }
 .cart-items { padding: 0 22px; border: 1px solid #e5ebf6; border-radius: 16px; background: #fff; }
 .cart-items .cart-item:first-child { border-top: 0; }
 .cart-page .order-summary { box-shadow: 0 8px 32px #1b4b9210; }

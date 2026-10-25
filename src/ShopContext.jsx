@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "./api.js";
+import api, { getErrorMessage } from "./api.js";
 import { defaultStoreSettings, formatMoney } from "../server/storeSettings.js";
 
 const ShopContext = createContext(null);
@@ -19,13 +19,18 @@ export function ShopProvider({ children }) {
   const [user, setUser] = useState(() => readStored("shopsphere_user", null));
   const [toast, setToast] = useState("");
   const [settings, setSettings] = useState(defaultStoreSettings);
+  const [settingsError, setSettingsError] = useState("");
   const navigate = useNavigate();
 
   const refreshSettings = useCallback(async () => {
     try {
       const { data } = await api.get("/settings");
+      if (!data.settings || typeof data.settings !== "object") throw new Error("ShopSphere API response is invalid.");
       setSettings({ ...defaultStoreSettings, ...data.settings });
-    } catch { /* Keep the storefront usable when the API is offline. */ }
+      setSettingsError("");
+    } catch (error) {
+      setSettingsError(getErrorMessage(error));
+    }
   }, []);
   useEffect(() => { refreshSettings(); }, [refreshSettings]);
   useEffect(() => {
@@ -60,6 +65,9 @@ export function ShopProvider({ children }) {
 
   const signIn = async (credentials, mode) => {
     const { data } = await api.post(`/auth/${mode}`, credentials);
+    if (typeof data.token !== "string" || !data.user || typeof data.user !== "object") {
+      throw new Error("ShopSphere API response is invalid.");
+    }
     localStorage.setItem("shopsphere_token", data.token);
     setUser(data.user);
     return data.user;
@@ -95,9 +103,9 @@ export function ShopProvider({ children }) {
   };
 
   const value = useMemo(() => ({
-    cart, wishlist, user, toast, settings, refreshSettings, refreshUser, signIn, logout, addToCart,
+    cart, wishlist, user, toast, settings, settingsError, refreshSettings, refreshUser, signIn, logout, addToCart,
     updateQuantity, toggleWishlist, setCart, setToast,
-  }), [cart, wishlist, user, toast, settings, refreshSettings, refreshUser]);
+  }), [cart, wishlist, user, toast, settings, settingsError, refreshSettings, refreshUser]);
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }
