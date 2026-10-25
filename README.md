@@ -75,11 +75,53 @@ npm run build
 npm run preview
 ```
 
-The Express API is a separate Render service (`render.yaml`); Vercel only hosts the React SPA. The SPA rewrite deliberately excludes `/api/*`, so a missing API configuration cannot silently return `index.html` for JSON requests. The production frontend requires `VITE_API_URL` in Vercel, set to the full HTTPS Render API URL ending in `/api` (for example, `https://your-service.onrender.com/api`). Do not set it to `/api` in Vercel. The local development default remains `/api` and Vite proxies it to `http://localhost:5000`.
+Vercel can now host both the Vite SPA and the existing Express API in one project. `api/index.js` is the Node function; it imports `server/app.js`, which contains all existing routes and does not open a port or exit the process on import. `server/index.js` remains the local/Render listening entry point. The root install command installs both package-lock files, so Express, Mongoose and other nested backend dependencies are available when Vercel traces the function.
 
-In Vercel, set `VITE_API_URL` for Production and any Preview environments that should use the API, then redeploy because Vite embeds this value at build time. In Render, deploy the included `render.yaml` (or create a Node web service with root directory `server`, build command `npm install`, start command `npm start`, and health check `/api/health`). Set `MONGO_URI`, `JWT_SECRET` (random, at least 32 characters), and `FRONTEND_URL` (the exact deployed Vercel origin, such as `https://shop-sand-gamma.vercel.app`) in the Render service environment. Seed the Atlas catalog with `npm --prefix server run seed` from the project root in a trusted local environment; the seed script inserts missing sample products/categories without overwriting existing entries. Create the administrator using the documented script. Restrict the Atlas network access list to the deployment environment where possible.
+The frontend defaults to same-origin `/api` in production. A separate backend URL is no longer required. `vercel.json` sends `/api` and every `/api/*` path to the API function before the SPA fallback. Unknown API endpoints return JSON 404 responses; unknown SPA paths go to the React app. Vite's local proxy is used only by the development server.
 
-Optional Render API variables: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` enable online payments; `RESEND_API_KEY` and `RESEND_FROM` enable email; `ORDER_NOTIFICATION_EMAIL` enables owner order notifications. Admin account provisioning variables are only needed when running the one-time create-admin/create-super-admin scripts. Never set API secrets in Vercel's frontend environment; only `VITE_API_URL` is needed there.
+Configure this existing Vercel project as follows:
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | Repository root (`.`), not `server` or `dist` |
+| Framework Preset | Vite |
+| Install Command | `npm ci && npm --prefix server ci` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| Node.js version | 22.x |
+
+The install/build/output settings are also committed in `vercel.json`. Remove old dashboard overrides that conflict with them. Do not use `npm start` or `npm run start:api` as Vercel's build command. After deployment, the Functions list should contain the `api/index` function.
+
+Set these in Vercel → Project → Settings → Environment Variables, for Production and any Preview deployments that should use the backend:
+
+| Variable | Value / purpose |
+| --- | --- |
+| `VITE_API_URL` | `/api`, or remove the variable to use the same default. Replace any stale external-backend URL. This is the only frontend variable required. |
+| `MONGO_URI` | Your actual MongoDB Atlas URI, including the database name. Server-only. |
+| `JWT_SECRET` | A strong random secret of at least 32 characters. Server-only; reuse the previous secret if existing tokens must remain valid. |
+| `FRONTEND_URL` | `https://shop-sand-gamma.vercel.app` for the stated production site. Additional trusted frontend origins can be comma-separated. Same-origin requests and Vercel's supplied deployment hostnames are also supported. |
+| `NODEJS_HELPERS` | `0`, so Vercel does not preparse request bodies needed by the signed Razorpay raw-body webhook. |
+| `CRON_SECRET` | A separate strong random secret of at least 32 characters, used by the protected notification retry cron. |
+
+Never prefix database, authentication, payment or email secrets with `VITE_`: Vite exposes prefixed values in the browser bundle. Local `.env` files are excluded from upload in `.vercelignore`; set real production secrets in the Vercel dashboard. MongoDB Atlas must permit connections from your deployment's egress network, and the database user needs access to the selected database. Order placement/payment reconciliation requires a transaction-capable Atlas deployment. A missing configuration or failed connection returns JSON 503; it is not reported as healthy.
+
+Optional server-only variables remain unchanged: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RESEND_API_KEY`, `RESEND_FROM`, and `ORDER_NOTIFICATION_EMAIL`. Point Razorpay's webhook to `https://shop-sand-gamma.vercel.app/api/payments/webhook` for this deployment. Admin provisioning variables are needed only for the one-time provisioning scripts, not normal API requests. Deployment does not seed products or create an administrator automatically.
+
+MongoDB connections and in-flight connection promises are reused within a warm function instance, with a small pool and bounded connection timeout. Failed connections can be retried by later requests. The function never disconnects the pool at the end of a request.
+
+Notification and audit work is retained with Vercel's `waitUntil`. The durable outbox is also retried in bounded batches after successful API requests. A protected daily cron (`06:00 UTC`) handles idle retries; this schedule is compatible with the Hobby daily-cron limit. This is not a continuously running 15-second worker. For frequent retries on an otherwise idle site, configure a scheduler allowed by your plan or keep the existing always-on Render worker. Local/Render startup retains the existing worker. The cron requires `Authorization: Bearer <CRON_SECRET>`; Vercel supplies it when `CRON_SECRET` is configured.
+
+Save the variables, then redeploy the latest commit. Vite replaces frontend variables at build time, so changes do not affect an already-built deployment. Verify the real deployment with:
+
+```sh
+npm run verify:production -- https://shop-sand-gamma.vercel.app
+```
+
+This requires `/api/health` to return HTTP 200 JSON with `database: "connected"`, verifies catalog JSON, login validation, authentication enforcement, API 404 JSON and the `/login` SPA fallback. To also test a real existing account, set `SHOPSPHERE_SMOKE_EMAIL` and `SHOPSPHERE_SMOKE_PASSWORD` locally before running the script; the credentials and returned token are never logged. The smoke script does not create customers, orders, payments or emails. A working local build or stubbed test suite does not prove that the live API is configured.
+
+Reference: [Vite functions on Vercel](https://vercel.com/docs/frameworks/frontend/vite), [Node.js functions](https://vercel.com/docs/functions/runtimes/node-js), [Node.js helper configuration](https://vercel.com/docs/functions/runtimes/node-js/advanced-node-configuration), and [cron authentication](https://vercel.com/docs/cron-jobs/manage-cron-jobs).
+
+The separate Render deployment remains optional: use `render.yaml`, keep secrets on Render, and set `VITE_API_URL` to its actual HTTPS `/api` base only if choosing that architecture. No external backend URL is hardcoded or inferred.
 
 ## Main routes
 

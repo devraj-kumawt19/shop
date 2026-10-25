@@ -31,15 +31,17 @@ export async function enqueueOrderEmails(order, settings, session) {
   }
 }
 
-export async function dispatchNotifications() {
+export async function dispatchNotifications({ maxJobs = 10, deadline = Infinity } = {}) {
   if (!emailConfigured()) return;
-  for (let count = 0; count < 10; count++) {
+  let processed = 0;
+  for (let count = 0; count < maxJobs; count++) {
+    if (Date.now() + 5000 >= deadline) break;
     const now = new Date();
     const job = await Notification.findOneAndUpdate({ status: "pending", attempts: { $lt: 8 }, nextAttempt: { $lte: now }, lockedUntil: { $lte: now } }, { $set: { lockedUntil: new Date(Date.now() + 60000) }, $inc: { attempts: 1 } }, { new: true }).lean();
-    if (!job) return;
+    if (!job) break;
     try {
       const response = await fetch("https://api.resend.com/emails", {
-        method: "POST", signal: AbortSignal.timeout(15000),
+        method: "POST", signal: AbortSignal.timeout(Math.max(1000, Math.min(15000, deadline - Date.now() - 2000))),
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json", "Idempotency-Key": job.key },
         body: JSON.stringify({ ...job.payload, from: process.env.RESEND_FROM }),
       });
@@ -51,7 +53,9 @@ export async function dispatchNotifications() {
       await Notification.updateOne({ _id: job._id }, { $set: { status: failed ? "failed" : "pending", lockedUntil: new Date(0), nextAttempt: new Date(Date.now() + Math.min(3600000, 30000 * 2 ** job.attempts)), lastError: error.name === "TimeoutError" ? "Email provider timed out" : "Email delivery failed" } });
       await Order.updateOne({ _id: job.order }, { $set: { [`emailStatus.${job.kind}`]: failed ? "failed" : "queued" } });
     }
+    processed++;
   }
+  return processed;
 }
 
 export function startNotificationWorker() {

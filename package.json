@@ -11,9 +11,12 @@
     "dev:api": "npm --prefix server run dev",
     "start:api": "npm --prefix server start",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "npm --prefix server test",
+    "verify:production": "node scripts/verify-production.mjs"
   },
   "dependencies": {
+    "@vercel/functions": "^3.10.3",
     "axios": "^1.20.0",
     "lucide-react": "^1.61.0",
     "react": "^18.3.1",

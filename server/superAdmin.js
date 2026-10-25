@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { User, Product, Category, Order, StoreSettings, AuditLog } from "./models.js";
 import { validateSettings, validateUserUpdate } from "./adminPolicy.js";
 import { defaultStoreSettings } from "./storeSettings.js";
+import { deferTask } from "./background.js";
 
 export const superAdminRouter = Router();
 const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res)).catch(next);
@@ -15,7 +16,7 @@ export async function getStoreSettings() {
 export function auditAdminChanges(req, res, next) {
   if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) {
     res.on("finish", () => {
-      if (res.statusCode < 400) AuditLog.create({ actor: req.user.id, action: req.method, resource: req.originalUrl.split("?")[0] }).catch((error) => console.error("Could not record admin activity:", error.message));
+      if (res.statusCode < 400) deferTask(req, () => AuditLog.create({ actor: req.user.id, action: req.method, resource: req.originalUrl.split("?")[0] }), "Could not record admin activity.");
     });
   }
   next();

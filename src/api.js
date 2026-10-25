@@ -1,27 +1,21 @@
 import axios from "axios";
+import { resolveApiBase } from "../server/apiBase.js";
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim() || "";
-const apiBaseUrl = configuredApiUrl || (import.meta.env.DEV ? "/api" : "");
-const apiConfigurationError = "ShopSphere API is not configured. Set VITE_API_URL in Vercel to the deployed API URL ending in /api.";
-const apiResponseError = "The configured API URL returned a non-JSON response. Check that VITE_API_URL points to the deployed Express API ending in /api.";
-
-function hasValidProductionApiUrl(value) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && /\/api\/?$/.test(url.pathname);
-  } catch {
-    return false;
-  }
-}
+let apiBaseUrl = "/api";
+let apiConfigurationError = "";
+try { apiBaseUrl = resolveApiBase(configuredApiUrl, import.meta.env.DEV); }
+catch (error) { apiConfigurationError = error.message; }
+const apiResponseError = "The API returned a non-JSON response. Confirm that the Vercel API function is deployed and /api requests are excluded from the SPA fallback.";
 
 const api = axios.create({
   baseURL: apiBaseUrl || "/api",
-  timeout: 10000,
+  timeout: import.meta.env.DEV ? 10000 : 30000,
   headers: { "Content-Type": "application/json" },
 });
 
 api.interceptors.request.use((config) => {
-  if (!import.meta.env.DEV && !hasValidProductionApiUrl(apiBaseUrl)) {
+  if (apiConfigurationError) {
     return Promise.reject(new Error(apiConfigurationError));
   }
   const token = localStorage.getItem("shopsphere_token");
