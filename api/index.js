@@ -1,8 +1,9 @@
+import { expirePendingOrders } from "../server/orderLogic.js";
 import { waitUntil } from "@vercel/functions";
 import { app } from "../server/app.js";
 import { dispatchNotifications } from "../server/notifications.js";
 
-export function createHandler({ application = app, schedule = waitUntil, dispatch = dispatchNotifications } = {}) {
+export function createHandler({ application = app, schedule = waitUntil, dispatch = async (options) => { await expirePendingOrders(); return dispatchNotifications(options); } } = {}) {
   return async function handler(req, res) {
     req.backgroundTasks = [];
     await new Promise((resolve) => {

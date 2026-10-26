@@ -1,9 +1,12 @@
 import { Router } from "express";
 import mongoose from "mongoose";
+import { changeStock, markCartConverted, releaseCoupon } from "./orderLogic.js";
 import { Order, Product } from "./models.js";
 import { getStoreSettings } from "./superAdmin.js";
 import { enqueueOrderEmails } from "./notifications.js";
 import { matchesCapturedPayment, minorUnits, validSignature } from "./paymentPolicy.js";
+import { paymentWindowOpen } from "./commercePolicy.js";
+import { notifyProductChange } from "./customerEvents.js";
 
 export const paymentsConfigured = () => Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET && process.env.RAZORPAY_WEBHOOK_SECRET);
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -31,19 +34,23 @@ export async function finalizePayment(payment) {
         return;
       }
       const products = await Product.find({ _id: { $in: order.items.map((item) => item.product) } }).session(session).lean();
-      const enoughStock = order.status === "awaiting_payment" && order.items.every((item) => products.some((product) => String(product._id) === String(item.product) && product.stock >= item.quantity));
+      const enoughStock = order.status === "awaiting_payment" && paymentWindowOpen(order) && order.items.every((item) => products.some((product) => String(product._id) === String(item.product) && (item.variantSku ? product.variants?.find((variant) => variant.sku === item.variantSku)?.stock ?? 0 : product.stock) >= item.quantity));
       if (enoughStock) {
         for (const item of order.items) {
-          const result = await Product.updateOne({ _id: item.product, stock: { $gte: item.quantity } }, { $inc: { stock: -item.quantity } }, { session });
-          if (result.modifiedCount !== 1) throw fail("Inventory changed during payment verification. Please retry verification.", 409);
+          await changeStock(item, -item.quantity, { session, reason: "Online payment captured", reference: order.id });
+          const product = products.find((p) => String(p._id) === String(item.product));
+          const before = { ...product }; product.stock -= item.quantity;
+          await notifyProductChange(before, product, await getStoreSettings(), session);
         }
         order.inventoryCommitted = true;
         order.paymentStatus = "paid";
         order.status = "placed";
+        await markCartConverted(order.user, session);
       } else {
         order.paymentStatus = "refund_required";
         order.status = "cancelled";
         order.inventoryCommitted = false;
+        await releaseCoupon(order, session);
       }
       order.gatewayPaymentId = payment.id;
       order.paidAt = new Date();
@@ -85,6 +92,7 @@ export function createPaymentsRouter(authenticate) {
     const settings = await getStoreSettings();
     if (!settings.checkoutEnabled || !settings.onlinePaymentsEnabled || !paymentsConfigured()) throw fail("Online payments are currently unavailable.", 503);
     if (order.status !== "awaiting_payment") throw fail("This order cannot accept payment.", 409);
+    if (!paymentWindowOpen(order)) throw fail("This payment session has expired. Place a new order from your bag.", 409);
     let gatewayOrderId = order.gatewayOrderId;
     if (!gatewayOrderId) {
       const lease = new Date();

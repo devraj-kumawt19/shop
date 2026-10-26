@@ -4,7 +4,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { Category, Order, Product, User } from "./models.js";
+import { Category, Order, Product, User, StockMovement } from "./models.js";
 import { requireSuperAdmin } from "./adminPolicy.js";
 import { auditAdminChanges, getStoreSettings, superAdminRouter } from "./superAdmin.js";
 import { shippingFor } from "./storeSettings.js";
@@ -14,6 +14,12 @@ import { connectDatabase, requireDatabase } from "./database.js";
 import { deferTask } from "./background.js";
 import { timingSafeEqual } from "node:crypto";
 import { Notification } from "./models.js";
+import { priceCart, quoteCoupon, reserveCoupon, releaseCoupon, changeStock, markCartConverted, expirePendingOrders } from "./orderLogic.js";
+import { normalizeVariants, roundMoney } from "./commercePolicy.js";
+import { can, permit } from "./permissions.js";
+import { notifyProductChange, queueOrderUpdate } from "./customerEvents.js";
+import { createCommerceRouter } from "./commerceRoutes.js";
+import { seoRouter } from "./seo.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -43,7 +49,7 @@ app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 40, standardHe
 
 const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 const signToken = (user) => jwt.sign({ sub: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
-const publicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role });
+const publicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role, ...(Array.isArray(user.permissions) ? { permissions: user.permissions } : {}) });
 
 async function authenticate(req, res, next) {
   const authorization = req.headers.authorization || "";
@@ -99,11 +105,14 @@ app.get("/api/internal/notifications", (req, res, next) => {
   if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return res.status(401).json({ message: "A valid scheduler authorization token is required." });
   return next();
 }, requireDatabase, asyncRoute(async (req, res) => {
+  await expirePendingOrders();
   const processed = await dispatchNotifications({ maxJobs: 10, deadline: Date.now() + 40000 });
   return res.json({ processed: processed || 0 });
 }));
 app.get("/api/settings", requireDatabase, asyncRoute(async (req, res) => res.json({ settings: await getStoreSettings() })));
 app.use("/api/payments", requireDatabase, createPaymentsRouter(authenticate));
+app.use("/api", createCommerceRouter(authenticate));
+app.use(seoRouter);
 
 app.post("/api/auth/register", requireDatabase, asyncRoute(async (req, res) => {
   const { name, email, password } = req.body || {};
@@ -175,60 +184,32 @@ app.post("/api/orders", requireDatabase, authenticate, asyncRoute(async (req, re
   if (!Array.isArray(items) || items.length < 1 || items.length > 50) return res.status(400).json({ message: "Your order must contain between 1 and 50 products." });
   if (!["cash_on_delivery", "razorpay"].includes(paymentMethod)) return res.status(400).json({ message: "Choose an available payment method." });
   if (paymentMethod === "razorpay" && (!storeSettings.onlinePaymentsEnabled || !paymentsConfigured())) return res.status(503).json({ message: "Online payment is not configured. Choose cash on delivery." });
-  const combined = new Map();
-  for (const item of items) {
-    if (!mongoose.isValidObjectId(item.product) || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 99) {
-      return res.status(400).json({ message: "One or more products or quantities are invalid." });
-    }
-    combined.set(item.product, (combined.get(item.product) || 0) + item.quantity);
-    if (combined.get(item.product) > 99) return res.status(400).json({ message: "You can order up to 99 of each product." });
-  }
-  const productIds = [...combined.keys()];
   const session = await mongoose.startSession();
   let order;
   try {
     await session.withTransaction(async () => {
-      const products = await Product.find({ _id: { $in: productIds } }).session(session).lean();
-      if (products.length !== productIds.length) {
-        const unavailable = new Error("One or more items are no longer available.");
-        unavailable.status = 400;
-        throw unavailable;
+      const { products, orderItems, subtotal } = await priceCart(items, session);
+      if (paymentMethod === "razorpay" && process.env.RAZORPAY_KEY_ID?.startsWith("rzp_live_") && products.some((product) => product.isDemo)) throw Object.assign(new Error("Sample products can use test payments only."), { status: 400 });
+      const { coupon, discount } = await quoteCoupon(req.body.couponCode, subtotal, storeSettings.currency, req.user.id, session);
+      const shipping = shippingFor(subtotal - discount, storeSettings);
+      const orderId = new mongoose.Types.ObjectId();
+      await reserveCoupon(coupon, req.user.id, orderId, session);
+      if (paymentMethod === "cash_on_delivery") for (const item of orderItems) {
+        await changeStock(item, -item.quantity, { session, actor: req.user.id, reason: "Cash on delivery order", reference: String(orderId) });
+        const product = products.find((p) => String(p._id) === String(item.product)); const before = { ...product }; product.stock -= item.quantity;
+        await notifyProductChange(before, product, storeSettings, session);
       }
-      if (paymentMethod === "razorpay" && process.env.RAZORPAY_KEY_ID?.startsWith("rzp_live_") && products.some((product) => product.isDemo)) throw Object.assign(new Error("Sample products can use test payments only. Remove demo products from your bag before a live payment."), { status: 400 });
-      const orderItems = products.map((product) => ({
-        product: product._id,
-        name: product.name,
-        image: product.image,
-        quantity: combined.get(String(product._id)),
-        price: product.price,
-      }));
-      for (const item of orderItems) {
-        if (paymentMethod === "razorpay") {
-          if (!products.some((product) => String(product._id) === String(item.product) && product.stock >= item.quantity)) throw Object.assign(new Error("An item is out of stock. Please review your bag."), { status: 409 });
-          continue;
-        }
-        const update = await Product.updateOne(
-          { _id: item.product, stock: { $gte: item.quantity } },
-          { $inc: { stock: -item.quantity } },
-          { session },
-        );
-        if (update.modifiedCount !== 1) {
-          const soldOut = new Error("A product sold out while placing your order. Please review your bag.");
-          soldOut.status = 409;
-          throw soldOut;
-        }
-      }
-      const subtotal = Math.round(orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0) * 100) / 100;
-      const shipping = shippingFor(subtotal, storeSettings);
       [order] = await Order.create([{
+        _id: orderId,
         orderNumber: `SS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-        user: req.user.id, items: orderItems, shippingAddress, subtotal, shipping, total: Math.round((subtotal + shipping) * 100) / 100, paymentMethod,
+        user: req.user.id, items: orderItems, shippingAddress, subtotal, discount, couponCode: coupon?.code || "", coupon: coupon?._id, couponCommitted: Boolean(coupon), shipping, total: roundMoney(subtotal - discount + shipping), paymentMethod,
         currency: storeSettings.currency,
         status: paymentMethod === "razorpay" ? "awaiting_payment" : "placed",
         inventoryCommitted: paymentMethod !== "razorpay",
         containsDemoProducts: products.some((product) => product.isDemo),
+        timeline: [{ status: paymentMethod === "razorpay" ? "awaiting_payment" : "placed", message: paymentMethod === "razorpay" ? "Awaiting secure payment" : "Order placed" }],
       }], { session });
-      if (paymentMethod === "cash_on_delivery") await enqueueOrderEmails(order, storeSettings, session);
+      if (paymentMethod === "cash_on_delivery") { await markCartConverted(req.user.id, session); await enqueueOrderEmails(order, storeSettings, session); }
     });
   } catch (error) {
     if (error.status === 400 || error.status === 409) return res.status(error.status).json({ message: error.message });
@@ -252,7 +233,11 @@ app.get("/api/orders/:id", requireDatabase, authenticate, asyncRoute(async (req,
 }));
 
 app.use("/api/super-admin", requireDatabase, authenticate, requireSuperAdmin, auditAdminChanges, superAdminRouter);
-app.use("/api/admin", requireDatabase, authenticate, requireAdmin, auditAdminChanges);
+app.use("/api/admin", requireDatabase, authenticate, requireAdmin, (req, res, next) => {
+  const scope = req.path.split("/")[1];
+  const permissions = scope === "orders" ? (req.method === "GET" ? ["orders", "support"] : ["orders"]) : ["catalog"];
+  return permit(...permissions)(req, res, next);
+}, auditAdminChanges);
 app.get("/api/admin/products", asyncRoute(async (req, res) => res.json({ products: await Product.find().sort({ createdAt: -1 }).lean() })));
 app.post("/api/admin/products", asyncRoute(async (req, res) => {
   const { name, category, description, image, price, compareAtPrice, stock, badge } = req.body || {};
@@ -262,25 +247,56 @@ app.post("/api/admin/products", asyncRoute(async (req, res) => {
   if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(stock) || stock < 0) return res.status(400).json({ message: "Enter a positive price and a valid stock quantity." });
   const slug = String(req.body.categorySlug || category).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   if (!await Category.exists({ slug })) return res.status(400).json({ message: "Choose an existing product category." });
-  const product = await Product.create({ ...req.body, category: category.trim(), categorySlug: slug, price, compareAtPrice: Number(compareAtPrice) || 0, stock, featured: Boolean(req.body.featured) });
+  const variants = normalizeVariants(req.body.variants || []);
+  if (!can(req.user, "inventory") && (stock > 0 || variants.length)) return res.status(403).json({ message: "Inventory permission is required to set initial stock or product options." });
+  const session = await mongoose.startSession(); let product;
+  try { await session.withTransaction(async () => {
+  [product] = await Product.create([{ name: name.trim(), description, image, badge, category: category.trim(), categorySlug: slug, price: variants.length ? Math.min(...variants.map((v) => v.price)) : price, compareAtPrice: Number(compareAtPrice) || 0, stock: variants.length ? variants.reduce((sum, v) => sum + v.stock, 0) : stock, variants, featured: Boolean(req.body.featured), isDemo: Boolean(req.body.isDemo) }], { session });
+  const initial = variants.length ? variants.filter((v) => v.stock > 0).map((v) => ({ product: product.id, variantSku: v.sku, delta: v.stock, reason: "Initial inventory", actor: req.user.id })) : stock > 0 ? [{ product: product.id, delta: stock, reason: "Initial inventory", actor: req.user.id }] : [];
+  if (initial.length) await StockMovement.create(initial, { session, ordered: true });
+  }); } finally { await session.endSession(); }
   return res.status(201).json({ product });
 }));
 app.patch("/api/admin/products/:id", asyncRoute(async (req, res) => {
-  const allowed = ["name", "category", "categorySlug", "description", "image", "price", "compareAtPrice", "stock", "badge", "featured", "isDemo"];
+  const allowed = ["name", "category", "categorySlug", "description", "image", "price", "compareAtPrice", "stock", "badge", "featured", "isDemo", "variants"];
   const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowed.includes(key)));
+  for (const key of ["price", "compareAtPrice", "stock"]) if (key in updates && (!Number.isFinite(updates[key]) || updates[key] < 0 || (key === "stock" ? !Number.isInteger(updates[key]) : roundMoney(updates[key]) !== updates[key]) || key === "price" && updates[key] === 0)) return res.status(400).json({ message: "Use a positive price, non-negative compare-at price and whole stock quantities." });
   if (updates.category && !updates.categorySlug) updates.categorySlug = updates.category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   if (updates.categorySlug && !await Category.exists({ slug: updates.categorySlug })) return res.status(400).json({ message: "Choose an existing product category." });
   if (updates.image) {
     const image = new URL(updates.image);
     if (!["http:", "https:"].includes(image.protocol)) return res.status(400).json({ message: "Image URL must use HTTP or HTTPS." });
   }
-  const product = await Product.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
-  if (!product) return res.status(404).json({ message: "We couldn't find that product." });
+  const before = await Product.findById(req.params.id).lean();
+  if (!before) return res.status(404).json({ message: "We couldn't find that product." });
+  if (("stock" in updates || "variants" in updates) && !can(req.user, "inventory")) return res.status(403).json({ message: "Inventory permission is required to edit stock or variants." });
+  // Stock edits use the inventory ledger, avoiding races with checkout.
+  if ("stock" in updates && updates.stock !== before.stock) return res.status(409).json({ message: "Change stock in Commerce tools > Inventory to record an adjustment." });
+  if ("variants" in updates) {
+    updates.variants = normalizeVariants(updates.variants);
+    for (const old of before.variants || []) {
+      const next = updates.variants.find((v) => v.sku === old.sku);
+      if (!next || next.stock !== old.stock) return res.status(409).json({ message: "Keep existing SKUs and stock unchanged. Use Inventory to change stock." });
+    }
+    if ((before.variants?.length || before.stock > 0) && updates.variants.some((v) => !before.variants?.some((old) => old.sku === v.sku) && v.stock > 0)) return res.status(409).json({ message: "New options must start with zero stock. Restock in Inventory after saving." });
+    if (!before.variants?.length && updates.variants.length && before.stock !== 0) return res.status(409).json({ message: "Set stock to zero through Inventory before adding variants." });
+    if (updates.variants.length) { updates.stock = updates.variants.reduce((sum, v) => sum + v.stock, 0); updates.price = Math.min(...updates.variants.map((v) => v.price)); }
+  }
+  const session = await mongoose.startSession(); let product;
+  try { await session.withTransaction(async () => {
+    product = await Product.findOneAndUpdate({ _id: before._id, updatedAt: before.updatedAt }, updates, { session, new: true, runValidators: true });
+    if (!product) throw Object.assign(new Error("Product changed. Refresh before editing."), { status: 409 });
+    await notifyProductChange(before, product, await getStoreSettings(), session);
+  }); } finally { await session.endSession(); }
   return res.json({ product });
 }));
 app.delete("/api/admin/products/:id", asyncRoute(async (req, res) => {
-  const product = await Product.findByIdAndDelete(req.params.id);
-  if (!product) return res.status(404).json({ message: "We couldn't find that product." });
+  const session = await mongoose.startSession();
+  try { await session.withTransaction(async () => {
+    if (await Order.exists({ "items.product": req.params.id, status: { $in: ["awaiting_payment", "placed", "processing", "shipped"] } }).session(session)) throw Object.assign(new Error("This product is in an active order. Resolve the order before deleting it."), { status: 409 });
+    const product = await Product.findByIdAndDelete(req.params.id, { session });
+    if (!product) throw Object.assign(new Error("We couldn't find that product."), { status: 404 });
+  }); } finally { await session.endSession(); }
   return res.json({ message: "Product removed." });
 }));
 
@@ -380,27 +396,23 @@ app.patch("/api/admin/orders/:id", asyncRoute(async (req, res) => {
       }
       if (order.status !== nextStatus && nextStatus === "cancelled" && order.inventoryCommitted !== false) {
         for (const item of order.items) {
-          await Product.updateOne({ _id: item.product }, { $inc: { stock: item.quantity } }, { session });
+          const before = await Product.findById(item.product).session(session).lean();
+          await changeStock(item, item.quantity, { session, actor: req.user.id, reason: "Order cancelled", reference: order.id });
+          await notifyProductChange(before, { ...before, stock: before.stock + item.quantity, updatedAt: new Date() }, await getStoreSettings(), session);
         }
         order.inventoryCommitted = false;
         if (order.paymentMethod === "razorpay" && order.paymentStatus === "paid") order.paymentStatus = "refund_required";
       } else if (order.status === "cancelled" && nextStatus !== "cancelled") {
-        for (const item of order.items) {
-          const update = await Product.updateOne(
-            { _id: item.product, stock: { $gte: item.quantity } },
-            { $inc: { stock: -item.quantity } },
-            { session },
-          );
-          if (update.modifiedCount !== 1) {
-            const unavailable = new Error("The order cannot be reopened because one or more items are out of stock.");
-            unavailable.status = 409;
-            throw unavailable;
-          }
-        }
+        if (order.couponCode) throw Object.assign(new Error("Cancelled discounted orders cannot be reopened; place a new order."), { status: 409 });
+        for (const item of order.items) await changeStock(item, -item.quantity, { session, actor: req.user.id, reason: "Order reopened", reference: order.id });
         order.inventoryCommitted = true;
       }
+      const changed = order.status !== nextStatus;
+      if (changed && nextStatus === "cancelled") await releaseCoupon(order, session);
       order.status = nextStatus;
+      if (changed) order.timeline.push({ status: nextStatus, message: `Order ${nextStatus}` });
       await order.save({ session });
+      if (changed) await queueOrderUpdate(order, session);
     });
   } catch (error) {
     if (error.status === 404 || error.status === 409) return res.status(error.status).json({ message: error.message });

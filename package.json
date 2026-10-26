@@ -13,7 +13,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "npm --prefix server test",
-    "verify:production": "node scripts/verify-production.mjs"
+    "verify:production": "node scripts/verify-production.mjs",
+    "verify:commerce": "node scripts/verify-commerce.mjs"
   },
   "dependencies": {
     "@vercel/functions": "^3.10.3",

@@ -10,3 +10,5 @@ server/.env.*
 !server/.env.example
 server/tests
 **/*.log
+
+.qa

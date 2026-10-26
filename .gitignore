@@ -8,3 +8,5 @@ server/.env
 server/.env.*
 !server/.env.example
 npm-debug.log*
+
+.qa/

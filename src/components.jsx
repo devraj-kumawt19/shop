@@ -39,7 +39,7 @@ export function ProductCard({ product }) {
         <button className={saved ? "favorite-button is-favorite" : "favorite-button"} onClick={() => toggleWishlist(product)} aria-pressed={saved} aria-label={saved ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}>
           <Heart size={18} fill={saved ? "currentColor" : "none"} />
         </button>
-        <button className="quick-add" disabled={product.stock < 1} onClick={() => addToCart(product)}>{product.stock > 0 ? <><ShoppingBag size={15} /> Add to bag</> : "Taking a little break"}</button>
+        <button className="quick-add" disabled={product.stock < 1} onClick={() => addToCart(product)}>{product.stock > 0 ? <><ShoppingBag size={15} /> {product.variants?.length ? "Choose options" : "Add to bag"}</> : "Taking a little break"}</button>
       </div>
       <div className="product-info">
         <div className="product-category">{product.category}</div>

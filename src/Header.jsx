@@ -1,3 +1,4 @@
+import { NotificationBell } from "./CommerceWidgets.jsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, ChevronDown, Compass, Heart, LayoutGrid, LogOut, Menu, Search, ShieldCheck, ShoppingBag, Sparkles, Tag, UserRound, X } from "lucide-react";
@@ -72,7 +73,7 @@ export default function Header() {
           {settings.saleEnabled && <Link className={navClass(isSale, "signature-sale-link")} aria-current={isSale ? "page" : undefined} to="/products?sale=true"><Tag size={13} />The sale<span className="nav-sale-dot" /></Link>}
         </nav>
 
-        <div className="signature-actions">
+        <div className="signature-actions"><NotificationBell />
           <button ref={searchButton} className={`signature-icon ${panel === "search" ? "is-open" : ""}`} aria-label={panel === "search" ? "Close product search" : "Search products"} aria-expanded={panel === "search"} aria-controls="navigation-search" onClick={() => togglePanel("search")}><Search size={18} /></button>
           <Link className="signature-icon signature-wishlist" aria-label={`Wishlist${wishlist.length ? `, ${wishlist.length} saved items` : ""}`} to="/wishlist"><Heart size={18} />{wishlist.length > 0 && <span className="signature-count">{wishlist.length}</span>}</Link>
           <span className="signature-divider" aria-hidden="true" />

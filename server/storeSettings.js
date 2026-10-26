@@ -17,6 +17,8 @@ export const defaultStoreSettings = {
   saleEnabled: true,
   saleTitle: "Good finds. Even better prices.",
   saleDescription: "The pieces you love, with a little extra to love about the price.",
+  lowStockThreshold: 5,
+  aiAssistantEnabled: false,
 };
 
 export function shippingFor(subtotal, settings = defaultStoreSettings) {

@@ -5,6 +5,7 @@ import "./styles.css";
 import "./theme.css";
 import "./ui-refinements.css";
 import "./navigation.css";
+import "./commerce.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

@@ -10,6 +10,7 @@ const userSchema = new Schema({
   password: { type: String, required: true, minlength: 8, select: false },
   role: { type: String, enum: ["customer", "admin", "superadmin"], default: "customer" },
   isActive: { type: Boolean, default: true },
+  permissions: { type: [String], enum: ["catalog", "inventory", "orders", "reviews", "reports", "support"], default: undefined },
 }, { timestamps: true });
 
 userSchema.pre("save", async function hashPassword() {
@@ -33,6 +34,7 @@ const productSchema = new Schema({
   badge: { type: String, default: "", maxlength: 32 },
   featured: { type: Boolean, default: false },
   isDemo: { type: Boolean, default: false },
+  variants: [{ sku: { type: String, required: true }, size: String, color: String, price: { type: Number, required: true, min: 0 }, stock: { type: Number, required: true, min: 0 } }],
 }, { timestamps: true });
 productSchema.index({ name: "text", description: "text", category: "text" });
 
@@ -49,6 +51,8 @@ const orderItemSchema = new Schema({
   image: { type: String, required: true },
   quantity: { type: Number, required: true, min: 1 },
   price: { type: Number, required: true, min: 0 },
+  variantSku: { type: String, default: "" },
+  variantLabel: { type: String, default: "" },
 }, { _id: false });
 
 const orderSchema = new Schema({
@@ -66,6 +70,10 @@ const orderSchema = new Schema({
     phone: { type: String, required: true },
   },
   subtotal: { type: Number, required: true },
+  discount: { type: Number, default: 0, min: 0 },
+  couponCode: { type: String, default: "" },
+  coupon: { type: Schema.Types.ObjectId, ref: "Coupon" },
+  couponCommitted: { type: Boolean, default: false },
   shipping: { type: Number, required: true },
   total: { type: Number, required: true },
   currency: { type: String, enum: ["USD", "INR"], default: "USD" },
@@ -78,6 +86,8 @@ const orderSchema = new Schema({
   inventoryCommitted: { type: Boolean, default: true },
   containsDemoProducts: { type: Boolean, default: false },
   emailStatus: { customer: { type: String, default: "not_queued" }, owner: { type: String, default: "not_queued" } },
+  tracking: { carrier: String, awb: String, url: String, eta: Date, providerStatus: String, syncedAt: Date },
+  timeline: [{ status: String, message: String, location: String, at: { type: Date, default: Date.now } }],
   status: { type: String, enum: ["awaiting_payment", "placed", "processing", "shipped", "delivered", "cancelled"], default: "placed" },
 }, { timestamps: true });
 
@@ -101,10 +111,35 @@ export const StoreSettings = mongoose.models.StoreSettings || model("StoreSettin
 export const AuditLog = mongoose.models.AuditLog || model("AuditLog", auditSchema);
 
 const notificationSchema = new Schema({
-  key: { type: String, required: true, unique: true }, order: { type: Schema.Types.ObjectId, ref: "Order", required: true },
+  key: { type: String, required: true, unique: true }, order: { type: Schema.Types.ObjectId, ref: "Order" },
   kind: { type: String, enum: ["customer", "owner"], required: true }, payload: { type: Schema.Types.Mixed, required: true },
   status: { type: String, enum: ["pending", "sent", "failed"], default: "pending" }, attempts: { type: Number, default: 0 },
   nextAttempt: { type: Date, default: Date.now }, lockedUntil: { type: Date, default: () => new Date(0) }, lastError: String,
 }, { timestamps: true });
 notificationSchema.index({ status: 1, nextAttempt: 1, lockedUntil: 1 });
 export const Notification = mongoose.models.Notification || model("Notification", notificationSchema);
+
+const couponSchema = new Schema({
+  code: { type: String, required: true, unique: true, uppercase: true, trim: true },
+  type: { type: String, enum: ["percent", "fixed"], required: true }, amount: { type: Number, required: true, min: 0 },
+  currency: { type: String, enum: ["USD", "INR"], default: "USD" }, minimum: { type: Number, default: 0, min: 0 },
+  maximumDiscount: { type: Number, default: 0, min: 0 }, maxUses: { type: Number, default: 0, min: 0 },
+  uses: { type: Number, default: 0, min: 0 }, startsAt: Date, expiresAt: Date, active: { type: Boolean, default: true },
+}, { timestamps: true });
+const couponUseSchema = new Schema({ coupon: { type: Schema.Types.ObjectId, ref: "Coupon", required: true }, user: { type: Schema.Types.ObjectId, ref: "User", required: true }, order: { type: Schema.Types.ObjectId, ref: "Order", required: true } }, { timestamps: true });
+couponUseSchema.index({ coupon: 1, user: 1 }, { unique: true });
+const movementSchema = new Schema({ product: { type: Schema.Types.ObjectId, ref: "Product", required: true }, variantSku: { type: String, default: "" }, delta: { type: Number, required: true }, reason: { type: String, required: true, maxlength: 200 }, actor: { type: Schema.Types.ObjectId, ref: "User" }, reference: String }, { timestamps: true });
+movementSchema.index({ product: 1, createdAt: -1 });
+const reviewSchema = new Schema({ product: { type: Schema.Types.ObjectId, ref: "Product", required: true }, user: { type: Schema.Types.ObjectId, ref: "User", required: true }, order: { type: Schema.Types.ObjectId, ref: "Order", required: true }, rating: { type: Number, required: true, min: 1, max: 5 }, title: { type: String, maxlength: 100 }, text: { type: String, required: true, maxlength: 2000 }, photos: { type: [String], default: [] }, published: { type: Boolean, default: true } }, { timestamps: true });
+reviewSchema.index({ product: 1, user: 1 }, { unique: true });
+const alertSchema = new Schema({ user: { type: Schema.Types.ObjectId, ref: "User", required: true }, product: { type: Schema.Types.ObjectId, ref: "Product", required: true }, type: { type: String, enum: ["stock", "price"], required: true }, targetPrice: Number, currency: { type: String, default: "USD" }, active: { type: Boolean, default: true } }, { timestamps: true });
+alertSchema.index({ user: 1, product: 1, type: 1 }, { unique: true });
+const inboxSchema = new Schema({ user: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true }, key: { type: String, unique: true, required: true }, title: String, message: String, href: String, readAt: Date }, { timestamps: true });
+const cartSchema = new Schema({ user: { type: Schema.Types.ObjectId, ref: "User", required: true, unique: true }, items: [orderItemSchema], subtotal: Number, currency: String, convertedAt: Date }, { timestamps: true });
+export const Coupon = mongoose.models.Coupon || model("Coupon", couponSchema);
+export const CouponUse = mongoose.models.CouponUse || model("CouponUse", couponUseSchema);
+export const StockMovement = mongoose.models.StockMovement || model("StockMovement", movementSchema);
+export const Review = mongoose.models.Review || model("Review", reviewSchema);
+export const ProductAlert = mongoose.models.ProductAlert || model("ProductAlert", alertSchema);
+export const Inbox = mongoose.models.Inbox || model("Inbox", inboxSchema);
+export const CartState = mongoose.models.CartState || model("CartState", cartSchema);

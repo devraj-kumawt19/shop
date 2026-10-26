@@ -25,7 +25,7 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use((response) => {
   const contentType = response.headers["content-type"] || "";
-  if (!contentType.toLowerCase().includes("json")) throw new Error(apiResponseError);
+  if (!contentType.toLowerCase().includes("json") && !(response.config.responseType === "blob" && /application\/pdf|text\/csv/.test(contentType))) throw new Error(apiResponseError);
   return response;
 });
 

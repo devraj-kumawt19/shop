@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { Order, Product, User, StoreSettings, Notification } from "../models.js";
+import { Order, Product, User, StoreSettings, Notification, StockMovement, CartState, Inbox } from "../models.js";
 import { defaultStoreSettings } from "../storeSettings.js";
 import { minorUnits, validSignature, matchesCapturedPayment } from "../paymentPolicy.js";
 import { buildOrderEmail, dispatchNotifications, enqueueOrderEmails } from "../notifications.js";
@@ -27,6 +27,9 @@ const confirmation = () => ({ razorpay_order_id: order.gatewayOrderId, razorpay_
 before(async () => {
   mongoose.connection.readyState = 1;
   mock.method(mongoose, "startSession", async () => ({ withTransaction: async (handler) => handler(), endSession: async () => {} }));
+  mock.method(StockMovement, "create", async () => []);
+  mock.method(CartState, "updateOne", async () => ({ modifiedCount: 1 }));
+  mock.method(Inbox, "updateOne", async () => ({ modifiedCount: 1 }));
   mock.method(User, "findById", async () => ({ id: userId, role: "customer", isActive: true }));
   mock.method(StoreSettings, "findById", () => ({ lean: async () => settings }));
   mock.method(Order, "findOne", (filter) => query((!filter.user || filter.user === order.user) && (!filter.gatewayOrderId || filter.gatewayOrderId === order.gatewayOrderId) && (!filter._id || filter._id === order.id) ? order : null));
@@ -166,4 +169,12 @@ test("email failures stay queued for retry without changing the confirmed order"
   await enqueueOrderEmails(order, settings); await dispatchNotifications();
   assert.equal(jobs[0].status, "pending"); assert.equal(jobs[0].attempts, 1); assert.ok(jobs[0].nextAttempt > new Date());
   assert.equal(order.status, "placed"); assert.equal(order.paymentStatus, "paid");
+});
+
+test("order-update delivery cannot overwrite the confirmation email status", async () => {
+  order.emailStatus.customer = "failed";
+  jobs.push({ _id: "status-update", key: `order-update/${orderId}/revision`, order: orderId, kind: "customer", payload: { to: ["customer@example.test"], subject: "Order shipped", text: "Your order shipped." }, status: "pending", attempts: 0, nextAttempt: new Date(0), lockedUntil: new Date(0) });
+  await dispatchNotifications();
+  assert.equal(jobs[0].status, "sent");
+  assert.equal(order.emailStatus.customer, "failed");
 });

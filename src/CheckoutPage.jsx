@@ -16,13 +16,25 @@ export default function CheckoutPage() {
   const [method, setMethod] = useState("cash_on_delivery");
   const [onlineEnabled, setOnlineEnabled] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState(null);
+  const [applying, setApplying] = useState(false);
+  const discount = pendingOrder?.discount ?? coupon?.discount ?? 0;
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const shipping = shippingFor(subtotal, settings);
+  const shipping = pendingOrder?.shipping ?? shippingFor(subtotal - discount, settings);
+  useEffect(() => { setCoupon(null); }, [cart, settings.currency]);
   const preview = cart.some(({ product }) => String(product._id).startsWith("sphere-"));
   useEffect(() => { api.get("/payments/config").then(({ data }) => setOnlineEnabled(data.enabled)).catch(() => setOnlineEnabled(false)); }, []);
   if (!user) return <Navigate to="/login" state={{ from: "/checkout" }} replace />;
   if (!cart.length) return <Navigate to="/cart" replace />;
   if (!settings.checkoutEnabled) return <main id="main-content" className="page-width empty-state"><ShoppingBag size={35} /><h1>Orders are paused.</h1><p>We are temporarily not accepting new orders. Please check back soon.</p><Link to="/products" className="button button-dark">Keep browsing</Link></main>;
+
+  async function applyCoupon() {
+    setApplying(true); setError("");
+    try { const { data } = await api.post("/coupons/quote", { code: couponCode, items: cart.map(({ product, quantity, variantSku }) => ({ product: product._id, quantity, variantSku })) }); setCoupon(data); }
+    catch (error) { setCoupon(null); setError(getErrorMessage(error)); }
+    finally { setApplying(false); }
+  }
 
   async function submit(event) {
     event.preventDefault(); setLoading(true); setError("");
@@ -30,7 +42,7 @@ export default function CheckoutPage() {
     try {
       let order = pendingOrder;
       if (!order) {
-        const response = await api.post("/orders", { items: cart.map(({ product, quantity }) => ({ product: product._id, quantity })), shippingAddress: address, paymentMethod: method });
+        const response = await api.post("/orders", { items: cart.map(({ product, quantity, variantSku }) => ({ product: product._id, quantity, variantSku })), shippingAddress: address, paymentMethod: method, couponCode: coupon?.code });
         order = response.data.order;
         if (method === "razorpay") setPendingOrder(order);
       }
@@ -71,8 +83,9 @@ export default function CheckoutPage() {
         </section>
       </div>
       <aside className="order-summary checkout-summary"><div className="checkout-summary-title"><ShoppingBag size={20} /><h2>Your good things</h2><span>{cart.reduce((sum, item) => sum + item.quantity, 0)}</span></div>
-        {cart.map(({ product, quantity }) => <div className="checkout-product" key={product._id}><img src={product.image} alt="" /><span>{product.name}<small>Qty {quantity}</small></span><b>{money(product.price * quantity)}</b></div>)}
-        <div className="summary-line"><span>Subtotal</span><span>{money(subtotal)}</span></div><div className="summary-line"><span>Shipping</span><span>{shipping ? money(shipping) : "On us"}</span></div><div className="summary-line summary-total"><span>Total</span><strong>{money(subtotal + shipping)}</strong></div>
+        {cart.map(({ product, quantity, cartKey, variantLabel }) => <div className="checkout-product" key={cartKey || product._id}><img src={product.image} alt="" /><span>{product.name}<small>{variantLabel && `${variantLabel} ? `}Qty {quantity}</small></span><b>{money(product.price * quantity)}</b></div>)}
+        <div className="coupon-entry"><label htmlFor="coupon-code">Have a little extra savings?</label><div><input id="coupon-code" placeholder="Coupon code" value={couponCode} disabled={Boolean(pendingOrder) || loading} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} /><button type="button" disabled={applying || loading || Boolean(pendingOrder) || !couponCode.trim()} onClick={applyCoupon}>{applying ? "Checking..." : "Apply"}</button></div>{coupon && <p>{coupon.code} applied ? <button type="button" disabled={Boolean(pendingOrder) || loading} onClick={() => setCoupon(null)}>Remove</button></p>}</div>
+        <div className="summary-line"><span>Subtotal</span><span>{money(pendingOrder?.subtotal ?? subtotal)}</span></div>{discount > 0 && <div className="summary-line"><span>Discount</span><span>-{money(discount)}</span></div>}<div className="summary-line"><span>Shipping</span><span>{shipping ? money(shipping) : "On us"}</span></div><div className="summary-line summary-total"><span>Total</span><strong>{money(pendingOrder?.total ?? subtotal - discount + shipping)}</strong></div>
         <button className="button button-dark full-button" disabled={loading || preview}>{loading ? "Please wait..." : pendingOrder ? "Retry secure payment" : method === "razorpay" ? "Continue to payment" : "Place your order"}<ArrowRight size={17} /></button>
         <p className="payment-note"><LockKeyhole size={13} />{method === "razorpay" ? "Secured by Razorpay" : "Pay at your doorstep"}</p>
         <div className="checkout-reassurance"><span><Truck size={15} /> Thoughtful delivery</span><span><PackageCheck size={15} /> Easy returns</span></div>

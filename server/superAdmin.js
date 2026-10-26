@@ -33,6 +33,7 @@ superAdminRouter.get("/overview", route(async (req, res) => {
 }));
 
 superAdminRouter.get("/integrations", (req, res) => res.json({
+  ai: Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL), courier: Boolean(process.env.SHIPROCKET_TOKEN),
   razorpay: Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET && process.env.RAZORPAY_WEBHOOK_SECRET),
   email: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM), ownerEmail: Boolean(process.env.ORDER_NOTIFICATION_EMAIL),
 }));
@@ -44,7 +45,7 @@ superAdminRouter.get("/users", route(async (req, res) => {
   const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const filter = search ? { $or: [{ name: { $regex: escaped, $options: "i" } }, { email: { $regex: escaped, $options: "i" } }] } : {};
   const [users, total] = await Promise.all([
-    User.find(filter).select("name email role isActive createdAt").sort({ createdAt: -1 }).skip((page - 1) * 25).limit(25).lean(), User.countDocuments(filter),
+    User.find(filter).select("name email role isActive permissions createdAt").sort({ createdAt: -1 }).skip((page - 1) * 25).limit(25).lean(), User.countDocuments(filter),
   ]);
   res.json({ users, page, pages: Math.ceil(total / 25), total });
 }));
@@ -53,11 +54,13 @@ superAdminRouter.patch("/users/:id", route(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "Account not found." });
   const target = await User.findById(req.params.id);
   if (!target) return res.status(404).json({ message: "Account not found." });
-  const input = req.body || {};
+  const input = { ...(req.body || {}) };
+  if (input.role === "admin" && target.role !== "admin" && !("permissions" in input)) input.permissions = [];
+  if (input.role === "customer") input.permissions = [];
   const error = validateUserUpdate(req.user, target, input);
   if (error) return res.status(400).json({ message: error });
   // Include the role in the write condition so concurrent promotion cannot alter a super admin.
-  const user = await User.findOneAndUpdate({ _id: target.id, role: { $ne: "superadmin" } }, { $set: input }, { new: true, runValidators: true }).select("name email role isActive createdAt");
+  const user = await User.findOneAndUpdate({ _id: target.id, role: { $ne: "superadmin" } }, { $set: input }, { new: true, runValidators: true }).select("name email role isActive permissions createdAt");
   if (!user) return res.status(409).json({ message: "This account changed. Refresh and try again." });
   return res.json({ user });
 }));

@@ -1,3 +1,5 @@
+import { NotificationsPage, ShoppingAssistant } from "./CommerceWidgets.jsx";
+import AdvancedAdmin from "./AdvancedAdmin.jsx";
 import { useEffect, useRef } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ShopProvider, useShop } from "./ShopContext.jsx";
@@ -58,6 +60,7 @@ function AppRoutes() {
       {!controlPanel && !authPage && <Header />}
       {!import.meta.env.DEV && settingsError && <div className="page-width app-api-error"><StatusMessage tone="error">{settingsError}</StatusMessage></div>}
       <Toast />
+      <ShoppingAssistant />
       <PageTransition>
       <Routes>
         <Route path="/" element={<HomePage />} />
@@ -72,6 +75,8 @@ function AppRoutes() {
         <Route path="/my-orders" element={<OrdersPage />} />
         <Route path="/my-orders/:id" element={<OrderDetailsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/management" element={<AdvancedAdmin />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/super-admin" element={<SuperAdminPage />} />
         <Route path="*" element={<NotFoundPage />} />

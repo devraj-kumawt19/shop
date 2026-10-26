@@ -80,20 +80,35 @@ export function ShopProvider({ children }) {
     navigate("/");
   };
 
-  const addToCart = (product, quantity = 1) => {
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      api.put("/cart", { items: cart.map(({ product, quantity, variantSku }) => ({ product: product._id, quantity, variantSku })) }, { signal: controller.signal }).catch(() => {});
+    }, 1200);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [cart, user?.id]);
+
+  const addToCart = (product, quantity = 1, variantSku = "") => {
+    const variant = product.variants?.find((item) => item.sku === variantSku);
+    if (product.variants?.length && !variant) { navigate(`/products/${product._id}`); return; }
+    const stock = variant?.stock ?? product.stock;
+    if (stock < 1) { setToast("This option is currently out of stock."); return; }
+    const cartKey = variant ? `${product._id}:${variant.sku}` : product._id;
+    const snapshot = { ...product, price: variant?.price ?? product.price, stock };
     setCart((current) => {
-      const match = current.find((item) => item.product._id === product._id);
+      const match = current.find((item) => (item.cartKey || item.product._id) === cartKey);
       return match
-        ? current.map((item) => item.product._id === product._id ? { ...item, quantity: item.quantity + quantity } : item)
-        : [...current, { product, quantity }];
+        ? current.map((item) => (item.cartKey || item.product._id) === cartKey ? { ...item, product: snapshot, quantity: Math.min(item.quantity + quantity, stock, 99) } : item)
+        : [...current, { product: snapshot, quantity: Math.min(quantity, stock, 99), cartKey, variantSku, variantLabel: variant ? [variant.size, variant.color].filter(Boolean).join(" / ") || variant.sku : "" }];
     });
     setToast(`${product.name} added to your bag`);
   };
 
   const updateQuantity = (productId, quantity) => {
     setCart((current) => quantity < 1
-      ? current.filter((item) => item.product._id !== productId)
-      : current.map((item) => item.product._id === productId ? { ...item, quantity: Math.min(quantity, item.product.stock || 99) } : item));
+      ? current.filter((item) => (item.cartKey || item.product._id) !== productId)
+      : current.map((item) => (item.cartKey || item.product._id) === productId ? { ...item, quantity: Math.min(quantity, item.product.stock || 99, 99) } : item));
   };
 
   const toggleWishlist = (product) => {

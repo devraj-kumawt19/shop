@@ -4,7 +4,7 @@ import http from "node:http";
 import { createHmac } from "node:crypto";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
-import { User, Product } from "../models.js";
+import { User, Product, Order } from "../models.js";
 import { connectDatabase } from "../database.js";
 import { resolveApiBase } from "../apiBase.js";
 import { readFile } from "node:fs/promises";
@@ -29,7 +29,7 @@ before(async () => {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${server.address().port}`;
 });
-beforeEach(() => { mongoose.connection.readyState = 1; pending = []; dispatches = 0; });
+beforeEach(() => { mock.method(Order, "find", () => ({ limit() { return this; }, select() { return this; }, lean: async () => [] })); mongoose.connection.readyState = 1; pending = []; dispatches = 0; });
 after(async () => { await Promise.allSettled(pending); await new Promise((resolve) => server.close(resolve)); mock.restoreAll(); mongoose.connection.readyState = 0; });
 
 test("production API base defaults to same-origin /api and validates overrides", () => {

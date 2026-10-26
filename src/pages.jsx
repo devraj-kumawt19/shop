@@ -1,6 +1,9 @@
+import { VariantEditor } from "./AdvancedAdmin.jsx";
+import { OrderExtras } from "./CommerceWidgets.jsx";
+import { can } from "../server/permissions.js";
 import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, ChevronRight, Heart, Minus, PackageCheck, Plus, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Star, Tag, Truck } from "lucide-react";
+import { ArrowUpRight, ArrowLeft, ArrowRight, Check, ChevronRight, Heart, Minus, PackageCheck, Plus, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Star, Tag, Truck } from "lucide-react";
 import api, { getErrorMessage } from "./api.js";
 import { categories } from "./data.js";
 import { useCategories, useProduct, useProducts } from "./hooks/useProducts.js";
@@ -122,28 +125,7 @@ export function ProductsPage() {
   );
 }
 
-export function ProductDetailPage() {
-  const money = useMoney();
-  const { id } = useParams();
-  const { product, loading, error } = useProduct(id);
-  const { addToCart, wishlist, toggleWishlist, settings, settingsError } = useShop();
-  const [quantity, setQuantity] = useState(1);
-  const recommendations = useProducts({ featured: "true" });
-  if (loading) return <main id="main-content" className="page-width detail-loading"><div className="skeleton-card" /><div className="skeleton-card" /></main>;
-  if (!product) return <main id="main-content" className="page-width empty-state">{error && error !== settingsError ? <StatusMessage tone="error">{error}</StatusMessage> : !settingsError && <h1>We couldn’t find that one.</h1>}<Link className="button button-dark" to="/products">Back to the shop</Link></main>;
-  const isSaved = wishlist.some((item) => item._id === product._id);
-  return (
-    <main id="main-content" className="page-width product-detail-page">
-      <div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><Link to="/products">Shop</Link><ChevronRight size={13} /><span>{product.name}</span></div>
-      {error && <StatusMessage>{error}</StatusMessage>}
-      <div className="product-detail">
-        <div className="detail-image"><img src={product.image} alt={product.name} /><span className="detail-image-label">A GOOD FIND, UP CLOSE</span></div>
-        <div className="detail-info"><span className="eyebrow">{product.category} / THOUGHTFULLY SELECTED</span><h1>{product.name}</h1><div className="detail-rating"><span><Star size={14} fill="currentColor" /> {Number(product.rating).toFixed(1)}</span><span>{product.reviewCount || 0} happy reviews</span></div><div className="detail-price">{money(product.price)} {product.compareAtPrice > product.price && <del>{money(product.compareAtPrice)}</del>}</div><p className="detail-description">{product.description}</p><div className={product.stock > 0 ? "stock-line" : "stock-line stock-unavailable"}><span className="stock-dot" /> {product.stock > 0 ? `In stock — ${product.stock} ready to ship` : "Currently out of stock"}</div><div className="purchase-row"><div className="quantity-control"><button aria-label="Decrease quantity" disabled={product.stock < 1} onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={14} /></button><span>{quantity}</span><button aria-label="Increase quantity" disabled={product.stock < 1} onClick={() => setQuantity(Math.min(product.stock || 1, quantity + 1))}><Plus size={14} /></button></div><button className="button button-dark add-detail" disabled={product.stock < 1} onClick={() => addToCart(product, quantity)}>{product.stock > 0 ? <>Add to bag <ShoppingBag size={17} /></> : "Out of stock"}</button><button className={isSaved ? "detail-heart is-favorite" : "detail-heart"} aria-label={isSaved ? "Remove from wishlist" : "Add to wishlist"} onClick={() => toggleWishlist(product)}><Heart size={19} fill={isSaved ? "currentColor" : "none"} /></button></div><div className="detail-promises"><div><Truck size={18} /><span><b>Free shipping over {money(settings.freeShippingThreshold)}</b><small>Delivered with care</small></span></div><div><ShieldCheck size={18} /><span><b>30-day easy returns</b><small>Love it or send it back</small></span></div></div></div>
-      </div>
-      <section className="related-section"><div className="section-heading"><div><span className="eyebrow">MORE TO LOVE</span><h2>Good together.</h2></div><Link className="subtle-link" to="/products">Shop all <ArrowRight size={15} /></Link></div><ProductGrid products={recommendations.products.filter((item) => item._id !== product._id).slice(0, 4)} loading={recommendations.loading} error={recommendations.error} showError={recommendations.error !== settingsError} /></section>
-    </main>
-  );
-}
+export { default as ProductDetailPage } from "./ProductDetailPage.jsx";
 
 export function CartPage() {
   const money = useMoney();
@@ -151,7 +133,7 @@ export function CartPage() {
   const subtotal = subtotalFor(cart);
   if (!cart.length) return <main id="main-content" className="page-width empty-state cart-empty"><span className="empty-icon"><ShoppingBag /></span><span className="eyebrow">YOUR BAG IS TAKING A BREATHER</span><h1>Nothing in here<br />just <em>yet.</em></h1><p>Good things are just a browse away.</p><Link className="button button-dark" to="/products">Find something good <ArrowRight size={16} /></Link></main>;
   return (
-    <main id="main-content" className="page-width cart-page"><div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><span>Your bag</span></div><div className="cart-heading"><div><span className="eyebrow">THE GOOD STUFF</span><h1>Your bag<span className="item-count"> ({cart.reduce((n, item) => n + item.quantity, 0)})</span></h1></div><Link to="/products" className="subtle-link"><ArrowLeft size={15} /> Keep browsing</Link></div><div className="cart-layout"><div className="cart-items">{cart.map(({ product, quantity }) => <article className="cart-item" key={product._id}><Link to={`/products/${product._id}`} className="cart-item-image"><img src={product.image} alt={product.name} /></Link><div className="cart-item-info"><span className="product-category">{product.category}</span><Link to={`/products/${product._id}`} className="product-name">{product.name}</Link><span className="cart-unit-price">{money(product.price)}</span><div className="quantity-control"><button aria-label={`Decrease ${product.name} quantity`} onClick={() => updateQuantity(product._id, quantity - 1)}><Minus size={13} /></button><span>{quantity}</span><button aria-label={`Increase ${product.name} quantity`} onClick={() => updateQuantity(product._id, quantity + 1)}><Plus size={13} /></button></div><button className="remove-link" onClick={() => updateQuantity(product._id, 0)}>Remove</button></div><strong className="cart-line-total">{money(product.price * quantity)}</strong></article>)}</div><aside className="order-summary"><h2>Good choice.</h2><p className="summary-caption">Here’s the little breakdown.</p><div className="summary-line"><span>Subtotal</span><span>{money(subtotal)}</span></div><div className="summary-line"><span>Shipping</span><span>{subtotal >= settings.freeShippingThreshold ? "On us" : money(settings.shippingFee)}</span></div><div className="summary-line summary-total"><span>Total</span><strong>{money(subtotal + (subtotal >= settings.freeShippingThreshold ? 0 : settings.shippingFee))}</strong></div><p className="shipping-note"><Truck size={15} /> {subtotal >= settings.freeShippingThreshold ? "You’ve unlocked free shipping!" : `${money(settings.freeShippingThreshold - subtotal)} away from free shipping`}</p><Link className="button button-dark checkout-button" to="/checkout">Checkout <ArrowRight size={16} /></Link><p className="payment-note"><ShieldCheck size={14} /> Secure checkout - Online or pay on delivery</p></aside></div></main>
+    <main id="main-content" className="page-width cart-page"><div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><span>Your bag</span></div><div className="cart-heading"><div><span className="eyebrow">THE GOOD STUFF</span><h1>Your bag<span className="item-count"> ({cart.reduce((n, item) => n + item.quantity, 0)})</span></h1></div><Link to="/products" className="subtle-link"><ArrowLeft size={15} /> Keep browsing</Link></div><div className="cart-layout"><div className="cart-items">{cart.map(({ product, quantity, cartKey, variantLabel }) => <article className="cart-item" key={cartKey || product._id}><Link to={`/products/${product._id}`} className="cart-item-image"><img src={product.image} alt={product.name} /></Link><div className="cart-item-info"><span className="product-category">{product.category}</span><Link to={`/products/${product._id}`} className="product-name">{product.name}</Link>{variantLabel && <small>{variantLabel}</small>}<span className="cart-unit-price">{money(product.price)}</span><div className="quantity-control"><button aria-label={`Decrease ${product.name} quantity`} onClick={() => updateQuantity(cartKey || product._id, quantity - 1)}><Minus size={13} /></button><span>{quantity}</span><button aria-label={`Increase ${product.name} quantity`} onClick={() => updateQuantity(cartKey || product._id, quantity + 1)}><Plus size={13} /></button></div><button className="remove-link" onClick={() => updateQuantity(cartKey || product._id, 0)}>Remove</button></div><strong className="cart-line-total">{money(product.price * quantity)}</strong></article>)}</div><aside className="order-summary"><h2>Good choice.</h2><p className="summary-caption">Here’s the little breakdown.</p><div className="summary-line"><span>Subtotal</span><span>{money(subtotal)}</span></div><div className="summary-line"><span>Shipping</span><span>{subtotal >= settings.freeShippingThreshold ? "On us" : money(settings.shippingFee)}</span></div><div className="summary-line summary-total"><span>Total</span><strong>{money(subtotal + (subtotal >= settings.freeShippingThreshold ? 0 : settings.shippingFee))}</strong></div><p className="shipping-note"><Truck size={15} /> {subtotal >= settings.freeShippingThreshold ? "You’ve unlocked free shipping!" : `${money(settings.freeShippingThreshold - subtotal)} away from free shipping`}</p><Link className="button button-dark checkout-button" to="/checkout">Checkout <ArrowRight size={16} /></Link><p className="payment-note"><ShieldCheck size={14} /> Secure checkout - Online or pay on delivery</p></aside></div></main>
   );
 }
 
@@ -198,7 +180,7 @@ export function OrderDetailsPage() {
       .catch((requestError) => setError(getErrorMessage(requestError)))
       .finally(() => setLoading(false));
   }, [id]);
-  return <RequireAuth><main id="main-content" className="page-width account-page"><div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><Link to="/my-orders">Your orders</Link><ChevronRight size={13} /><span>Order details</span></div>{loading ? <div className="skeleton-card order-detail-loading" /> : order ? <><div className="cart-heading"><div><span className="eyebrow">ORDER {order.orderNumber}</span><h1>{order.status === "awaiting_payment" ? <>Complete your <em>payment.</em></> : order.status === "cancelled" ? <>Order <em>cancelled.</em></> : <>Your order is <em>{order.status}.</em></>}</h1></div><span className={`order-status status-${order.status}`}>{order.status}</span></div>{error && <StatusMessage tone="error">{error}</StatusMessage>}{order.paymentStatus === "refund_required" && <StatusMessage tone="error">Payment was received but this order cannot be fulfilled. Contact the store for a refund review. A refund has not been issued automatically.</StatusMessage>}{order.status === "awaiting_payment" && <div className="order-payment-action"><StatusMessage>Your online payment is pending. This order will be confirmed after successful payment verification.</StatusMessage><button className="button button-dark" disabled={paying} onClick={retryPayment}>{paying ? "Opening payment..." : "Pay securely with Razorpay"}</button></div>}<div className="order-detail-layout"><section className="order-detail-items"><h2>Your good things</h2>{order.items.map((item, index) => <div className="order-detail-item" key={`${order._id}-${index}`}><img src={item.image} alt="" /><span>{item.name}<small>Quantity: {item.quantity}</small></span><strong>{money(item.price * item.quantity, order.currency || "USD")}</strong></div>)}</section><aside className="order-summary"><h2>Order summary</h2><p className="summary-caption">Placed {new Date(order.createdAt).toLocaleDateString()}</p><div className="summary-line"><span>Subtotal</span><span>{money(order.subtotal, order.currency || "USD")}</span></div><div className="summary-line"><span>Shipping</span><span>{order.shipping ? money(order.shipping, order.currency || "USD") : "On us"}</span></div><div className="summary-line"><span>Payment</span><span>{order.paymentMethod === "razorpay" ? `Online - ${order.paymentStatus}` : "Cash on delivery"}</span></div><div className="summary-line summary-total"><span>Total</span><strong>{money(order.total, order.currency || "USD")}</strong></div><h3 className="shipping-address-heading">Shipping to</h3><p className="shipping-address">{order.shippingAddress.firstName} {order.shippingAddress.lastName}<br />{order.shippingAddress.street}<br />{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postalCode}<br />{order.shippingAddress.phone}</p></aside></div></> : <StatusMessage tone="error">{error || "Order not found."}</StatusMessage>}</main></RequireAuth>;
+  return <RequireAuth><main id="main-content" className="page-width account-page"><div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><Link to="/my-orders">Your orders</Link><ChevronRight size={13} /><span>Order details</span></div>{loading ? <div className="skeleton-card order-detail-loading" /> : order ? <><div className="cart-heading"><div><span className="eyebrow">ORDER {order.orderNumber}</span><h1>{order.status === "awaiting_payment" ? <>Complete your <em>payment.</em></> : order.status === "cancelled" ? <>Order <em>cancelled.</em></> : <>Your order is <em>{order.status}.</em></>}</h1></div><span className={`order-status status-${order.status}`}>{order.status}</span></div>{error && <StatusMessage tone="error">{error}</StatusMessage>}{order.paymentStatus === "refund_required" && <StatusMessage tone="error">Payment was received but this order cannot be fulfilled. Contact the store for a refund review. A refund has not been issued automatically.</StatusMessage>}{order.status === "awaiting_payment" && <div className="order-payment-action"><StatusMessage>Your online payment is pending. This order will be confirmed after successful payment verification.</StatusMessage><button className="button button-dark" disabled={paying} onClick={retryPayment}>{paying ? "Opening payment..." : "Pay securely with Razorpay"}</button></div>}<div className="order-detail-layout"><section className="order-detail-items"><OrderExtras order={order} /><h2>Your good things</h2>{order.items.map((item, index) => <div className="order-detail-item" key={`${order._id}-${index}`}><img src={item.image} alt="" /><span>{item.name}<small>{item.variantLabel ? `${item.variantLabel} ? ` : ""}Quantity: {item.quantity}</small></span><strong>{money(item.price * item.quantity, order.currency || "USD")}</strong></div>)}</section><aside className="order-summary"><h2>Order summary</h2><p className="summary-caption">Placed {new Date(order.createdAt).toLocaleDateString()}</p><div className="summary-line"><span>Subtotal</span><span>{money(order.subtotal, order.currency || "USD")}</span></div>{order.discount > 0 && <div className="summary-line"><span>Discount ({order.couponCode})</span><span>-{money(order.discount, order.currency)}</span></div>}<div className="summary-line"><span>Shipping</span><span>{order.shipping ? money(order.shipping, order.currency || "USD") : "On us"}</span></div><div className="summary-line"><span>Payment</span><span>{order.paymentMethod === "razorpay" ? `Online - ${order.paymentStatus}` : "Cash on delivery"}</span></div><div className="summary-line summary-total"><span>Total</span><strong>{money(order.total, order.currency || "USD")}</strong></div><h3 className="shipping-address-heading">Shipping to</h3><p className="shipping-address">{order.shippingAddress.firstName} {order.shippingAddress.lastName}<br />{order.shippingAddress.street}<br />{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postalCode}<br />{order.shippingAddress.phone}</p></aside></div></> : <StatusMessage tone="error">{error || "Order not found."}</StatusMessage>}</main></RequireAuth>;
 }
 
 export function ProfilePage() {
@@ -227,6 +209,9 @@ export function ProfilePage() {
 
 export function AdminPage({ embedded = false, initialTab = "products" }) {
   const money = useMoney();
+  const { user } = useShop();
+  const catalogAccess = can(user, "catalog"), ordersAccess = can(user, "orders") || can(user, "support");
+  const [variants, setVariants] = useState([]);
   const AdminContainer = embedded ? "section" : "main";
   const [products, setProducts] = useState([]);
   const [categoryItems, setCategoryItems] = useState([]);
@@ -234,7 +219,7 @@ export function AdminPage({ embedded = false, initialTab = "products" }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState(initialTab);
+  const [tab, setTab] = useState(can(user, "catalog") ? initialTab : "orders");
   const [formOpen, setFormOpen] = useState(false);
   const [categoryFormOpen, setCategoryFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -243,7 +228,7 @@ export function AdminPage({ embedded = false, initialTab = "products" }) {
   async function loadDashboard() {
     try {
       const [productResult, orderResult, categoryResult] = await Promise.all([
-        api.get("/admin/products"), api.get("/admin/orders"), api.get("/admin/categories"),
+        catalogAccess ? api.get("/admin/products") : Promise.resolve({ data: { products: [] } }), ordersAccess ? api.get("/admin/orders") : Promise.resolve({ data: { orders: [] } }), catalogAccess ? api.get("/admin/categories") : Promise.resolve({ data: { categories: [] } }),
       ]);
       setProducts(productResult.data.products);
       setOrders(orderResult.data.orders);
@@ -251,7 +236,7 @@ export function AdminPage({ embedded = false, initialTab = "products" }) {
       setError("");
     } catch (requestError) { setError(getErrorMessage(requestError)); }
   }
-  useEffect(() => { loadDashboard(); }, []);
+  useEffect(() => { loadDashboard(); }, [user?.id, user?.permissions]);
 
   async function saveProduct(event) {
     event.preventDefault();
@@ -260,6 +245,7 @@ export function AdminPage({ embedded = false, initialTab = "products" }) {
     const chosenCategory = categoryItems.find((item) => item.slug === form.category);
     const payload = {
       ...form,
+      ...(can(user, "inventory") ? { variants } : {}),
       price: Number(form.price),
       compareAtPrice: Number(form.compareAtPrice || 0),
       stock: Number(form.stock),
@@ -268,6 +254,7 @@ export function AdminPage({ embedded = false, initialTab = "products" }) {
       category: chosenCategory?.name || form.category,
       categorySlug: form.category,
     };
+    if (editing) delete payload.stock;
     try {
       if (editing) await api.patch(`/admin/products/${editing._id}`, payload);
       else await api.post("/admin/products", payload);
@@ -331,17 +318,17 @@ export function AdminPage({ embedded = false, initialTab = "products" }) {
     <RequireAuth admin>
       <AdminContainer id={embedded ? undefined : "main-content"} className={embedded ? "admin-page admin-embedded" : "page-width admin-page"}>
         <div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><span>Admin</span></div>
-        <div className="section-heading"><div><span className="eyebrow">THE SHOP, BEHIND THE SCENES</span><h1>ShopSphere <em>studio.</em></h1></div></div>
+        <div className="section-heading"><div><span className="eyebrow">THE SHOP, BEHIND THE SCENES</span><h1>ShopSphere <em>studio.</em></h1></div><Link className="button button-dark" to="/management">Commerce tools <ArrowUpRight size={16} /></Link></div>
         {error && <StatusMessage tone="error">{error}</StatusMessage>}
         {notice && <StatusMessage tone="success">{notice}</StatusMessage>}
         <div className="admin-stats"><div><span>PRODUCTS</span><b>{products.length}</b></div><div><span>CATEGORIES</span><b>{categoryItems.length}</b></div><div><span>ACTIVE ORDER VALUE</span><b>{orderTotalLabel(orders)}</b></div></div>
         <div className="admin-toolbar">
           <div className="admin-tabs">
-            <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>Products</button>
-            <button className={tab === "categories" ? "active" : ""} onClick={() => setTab("categories")}>Categories</button>
-            <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}>Orders</button>
+            {catalogAccess && <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>Products</button>}
+            {catalogAccess && <button className={tab === "categories" ? "active" : ""} onClick={() => setTab("categories")}>Categories</button>}
+            {ordersAccess && <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}>Orders</button>}
           </div>
-          {tab === "products" && <button className="button button-dark" onClick={() => { setEditing(null); setFormOpen(!formOpen); }}>+ Add product</button>}
+          {tab === "products" && <button className="button button-dark" onClick={() => { setEditing(null); setVariants([]); setFormOpen(!formOpen); }}>+ Add product</button>}
           {tab === "categories" && <button className="button button-dark" onClick={() => { setEditingCategory(null); setCategoryFormOpen(!categoryFormOpen); }}>+ Add category</button>}
         </div>
         {formOpen && tab === "products" && <form key={editing?._id || "new-product"} className="admin-product-form" onSubmit={saveProduct}>
@@ -351,9 +338,10 @@ export function AdminPage({ embedded = false, initialTab = "products" }) {
             <label>Category<select name="category" defaultValue={categoryItems.find((item) => item.name === editing?.category)?.slug || ""} required><option value="" disabled>Choose a category</option>{categoryItems.map((item) => <option value={item.slug} key={item._id}>{item.name}</option>)}</select></label>
             <label>Price<input name="price" type="number" step=".01" min=".01" defaultValue={editing?.price} required /></label>
             <label>Compare at<input name="compareAtPrice" type="number" step=".01" min="0" defaultValue={editing?.compareAtPrice || 0} /></label>
-            <label>Stock<input name="stock" type="number" min="0" defaultValue={editing?.stock || 0} required /></label>
+            <label>Stock<input name="stock" type="number" min="0" defaultValue={editing?.stock || 0} required readOnly={Boolean(editing)} />{editing && <small>Adjust stock in <Link to="/management">Commerce tools / Inventory</Link>.</small>}</label>
             <label>Badge<input name="badge" defaultValue={editing?.badge} placeholder="BESTSELLER" /></label>
           </div>
+          {can(user, "inventory") && <VariantEditor value={variants} onChange={setVariants} existing={editing?.variants || []} />}
           <label>Image URL<input name="image" type="url" defaultValue={editing?.image} required /></label>
           <label>Description<textarea name="description" rows="3" defaultValue={editing?.description} required /></label>
           <label className="check-field"><input name="featured" type="checkbox" defaultChecked={editing?.featured} /> Show on homepage featured products</label>
@@ -367,9 +355,9 @@ export function AdminPage({ embedded = false, initialTab = "products" }) {
           <label>Description<input name="description" defaultValue={editingCategory?.description} /></label>
           <div className="admin-form-actions"><button type="button" className="button button-quiet" onClick={() => { setCategoryFormOpen(false); setEditingCategory(null); }}>Cancel</button><button className="button button-dark" disabled={busy}>{busy ? "Saving..." : editingCategory ? "Save category" : "Create category"}</button></div>
         </form>}
-        {tab === "products" && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>PRODUCT</th><th>CATEGORY</th><th>PRICE</th><th>STOCK</th><th>ACTIONS</th></tr></thead><tbody>{products.map((product) => <tr key={product._id}><td><div className="admin-product-name"><img src={product.image} alt="" /><span>{product.name}</span></div></td><td>{product.category}</td><td>{money(product.price)}</td><td>{product.stock}</td><td><button onClick={() => { setEditing(product); setFormOpen(true); window.scrollTo({ top: 500, behavior: "smooth" }); }}>Edit</button><button className="delete-button" onClick={() => deleteProduct(product)}>Delete</button></td></tr>)}</tbody></table>{!products.length && <p className="admin-empty">No products yet. Create your first one above.</p>}</div>}
+        {tab === "products" && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>PRODUCT</th><th>CATEGORY</th><th>PRICE</th><th>STOCK</th><th>ACTIONS</th></tr></thead><tbody>{products.map((product) => <tr key={product._id}><td><div className="admin-product-name"><img src={product.image} alt="" /><span>{product.name}</span></div></td><td>{product.category}</td><td>{money(product.price)}</td><td>{product.stock}</td><td><button onClick={() => { setEditing(product); setVariants((product.variants || []).map(({ sku, size, color, price, stock }) => ({ sku, size, color, price, stock }))); setFormOpen(true); window.scrollTo({ top: 500, behavior: "smooth" }); }}>Edit</button><button className="delete-button" onClick={() => deleteProduct(product)}>Delete</button></td></tr>)}</tbody></table>{!products.length && <p className="admin-empty">No products yet. Create your first one above.</p>}</div>}
         {tab === "categories" && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>CATEGORY</th><th>URL SLUG</th><th>DESCRIPTION</th><th>ACTIONS</th></tr></thead><tbody>{categoryItems.map((category) => <tr key={category._id}><td>{category.name}</td><td>{category.slug}</td><td>{category.description || "—"}</td><td><button onClick={() => { setEditingCategory(category); setCategoryFormOpen(true); window.scrollTo({ top: 500, behavior: "smooth" }); }}>Edit</button><button className="delete-button" onClick={() => deleteCategory(category)}>Delete</button></td></tr>)}</tbody></table>{!categoryItems.length && <p className="admin-empty">No categories yet. Create a collection above.</p>}</div>}
-        {tab === "orders" && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>TOTAL</th><th>PAYMENT</th><th>STATUS</th></tr></thead><tbody>{orders.map((order) => <tr key={order._id}><td>{order.orderNumber}</td><td>{order.user?.name || order.shippingAddress.firstName}</td><td>{money(order.total, order.currency || "USD")}</td><td><span>{order.paymentMethod === "razorpay" ? `Online - ${order.paymentStatus || "pending"}` : "Cash on delivery"}</span><small className="admin-email-status">Email: {order.emailStatus?.customer || "not_queued"}</small><button disabled={busy || order.status === "awaiting_payment"} onClick={() => retryEmails(order._id)}>Retry unsent emails</button></td><td><select disabled={order.status === "awaiting_payment" || order.paymentStatus === "refund_required"} value={order.status} onChange={(event) => changeOrderStatus(order._id, event.target.value)}><option value="awaiting_payment" disabled>Awaiting payment</option><option value="placed">Placed</option><option value="processing">Processing</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option></select></td></tr>)}</tbody></table>{!orders.length && <p className="admin-empty">Orders will show up here when customers check out.</p>}</div>}
+        {tab === "orders" && ordersAccess && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>TOTAL</th><th>PAYMENT</th><th>STATUS</th></tr></thead><tbody>{orders.map((order) => <tr key={order._id}><td>{order.orderNumber}</td><td>{order.user?.name || order.shippingAddress.firstName}</td><td>{money(order.total, order.currency || "USD")}</td><td><span>{order.paymentMethod === "razorpay" ? `Online - ${order.paymentStatus || "pending"}` : "Cash on delivery"}</span><small className="admin-email-status">Email: {order.emailStatus?.customer || "not_queued"}</small><button disabled={busy || !can(user, "orders") || order.status === "awaiting_payment"} onClick={() => retryEmails(order._id)}>Retry unsent emails</button></td><td><select disabled={!can(user, "orders") || order.status === "awaiting_payment" || order.paymentStatus === "refund_required"} value={order.status} onChange={(event) => changeOrderStatus(order._id, event.target.value)}><option value="awaiting_payment" disabled>Awaiting payment</option><option value="placed">Placed</option><option value="processing">Processing</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option></select></td></tr>)}</tbody></table>{!orders.length && <p className="admin-empty">Orders will show up here when customers check out.</p>}</div>}
       </AdminContainer>
     </RequireAuth>
   );
