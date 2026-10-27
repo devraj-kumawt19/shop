@@ -131,6 +131,7 @@ test("deployment routing sends /api before the SPA and keeps static assets and d
   const config = JSON.parse(await readFile(new URL("../../vercel.json", import.meta.url), "utf8"));
   assert.equal(config.framework, "vite"); assert.equal(config.outputDirectory, "dist");
   assert.match(config.installCommand, /--prefix server ci/);
+  assert.equal(config.functions["api/index.js"].includeFiles, "{dist/index.html,server/assets/fonts/**}");
   assert.equal(config.rewrites[0].destination, "/api/index");
   const fallback = new RegExp(`^${config.rewrites.at(-1).source}$`);
   for (const path of ["/api", "/api/health", "/api/auth/login", "/api/payments/webhook"]) assert.equal(fallback.test(path), false);

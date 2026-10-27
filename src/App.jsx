@@ -4,7 +4,8 @@ import WalletPage from "./WalletPage.jsx";
 import DealsPage from "./DealsPage.jsx";
 import QuickDeliveryPage from "./QuickDeliveryPage.jsx";
 import { useEffect, useRef } from "react";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+import { ShoppingBag } from "lucide-react";
 import { ShopProvider, useShop } from "./ShopContext.jsx";
 import { SiteFooter, StatusMessage } from "./components.jsx";
 import Header from "./Header.jsx";
@@ -46,23 +47,36 @@ function RouteTracker() {
   return null;
 }
 
-function Toast() {
+function Toast({ hasFloatingCart }) {
   const { toast } = useShop();
-  return toast ? <div className="toast-message" role="status" aria-live="polite">{toast}</div> : null;
+  return toast ? <div className={`toast-message ${hasFloatingCart ? "toast-message-with-cart" : ""}`} role="status" aria-live="polite">{toast}</div> : null;
+}
+
+function FloatingCart({ count }) {
+  if (!count) return null;
+  return (
+    <Link className="floating-cart" to="/cart" aria-label={`Open your bag, ${count} ${count === 1 ? "item" : "items"}`}>
+      <ShoppingBag size={21} strokeWidth={1.8} aria-hidden="true" />
+      <span className="floating-cart-count" aria-hidden="true">{count > 99 ? "99+" : count}</span>
+    </Link>
+  );
 }
 
 function AppRoutes() {
   const pathname = useLocation().pathname;
   const controlPanel = pathname === "/super-admin";
   const authPage = pathname === "/login" || pathname === "/register";
-  const { settingsError } = useShop();
+  const { cart, settingsError } = useShop();
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const showFloatingCart = cartCount > 0 && pathname !== "/cart" && !controlPanel && !authPage;
   return (
     <>
       <RouteTracker />
       <a className="skip-link" href="#main-content">Skip to content</a>
       {!controlPanel && !authPage && <Header />}
       {!import.meta.env.DEV && settingsError && <div className="page-width app-api-error"><StatusMessage tone="error">{settingsError}</StatusMessage></div>}
-      <Toast />
+      <Toast hasFloatingCart={showFloatingCart} />
+      {showFloatingCart && <FloatingCart count={cartCount} />}
       <ShoppingAssistant />
       <PageTransition>
       <Routes>
