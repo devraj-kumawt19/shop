@@ -92,6 +92,15 @@ export function ShopProvider({ children }) {
     return data.user;
   };
 
+  const updateProfile = async (profile) => {
+    const { data } = await api.patch("/auth/profile", profile);
+    if (!data.user || typeof data.user !== "object") {
+      throw new Error("ShopSphere API response is invalid.");
+    }
+    setUser(data.user);
+    return data.user;
+  };
+
   const logout = () => {
     localStorage.removeItem("shopsphere_token");
     setUser(null);
@@ -137,7 +146,7 @@ export function ShopProvider({ children }) {
   };
 
   const value = useMemo(() => ({
-    cart, wishlist, user, toast, settings, settingsError, refreshSettings, refreshUser, signIn, logout, addToCart,
+    cart, wishlist, user, toast, settings, settingsError, refreshSettings, refreshUser, signIn, updateProfile, logout, addToCart,
     updateQuantity, toggleWishlist, setCart, setToast,
   }), [cart, wishlist, user, toast, settings, settingsError, refreshSettings, refreshUser]);
 

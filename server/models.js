@@ -11,6 +11,7 @@ const userSchema = new Schema({
   role: { type: String, enum: ["customer", "admin", "superadmin"], default: "customer" },
   isActive: { type: Boolean, default: true },
   permissions: { type: [String], enum: ["catalog", "inventory", "orders", "reviews", "reports", "support"], default: undefined },
+  profileImage: { type: String, default: "", maxlength: 245800 },
 }, { timestamps: true });
 
 userSchema.pre("save", async function hashPassword() {

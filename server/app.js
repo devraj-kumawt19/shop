@@ -22,6 +22,7 @@ import { can, permit } from "./permissions.js";
 import { notifyProductChange, queueOrderUpdate } from "./customerEvents.js";
 import { createCommerceRouter } from "./commerceRoutes.js";
 import { seoRouter } from "./seo.js";
+import { isValidProfileImage } from "./profileImage.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -51,7 +52,7 @@ app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 40, standardHe
 
 const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 const signToken = (user) => jwt.sign({ sub: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
-const publicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role, ...(Array.isArray(user.permissions) ? { permissions: user.permissions } : {}) });
+const publicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role, profileImage: user.profileImage || "", ...(Array.isArray(user.permissions) ? { permissions: user.permissions } : {}) });
 
 async function authenticate(req, res, next) {
   const authorization = req.headers.authorization || "";
@@ -139,13 +140,17 @@ app.post("/api/auth/login", requireDatabase, asyncRoute(async (req, res) => {
 
 app.get("/api/auth/me", requireDatabase, authenticate, (req, res) => res.json({ user: publicUser(req.user) }));
 app.patch("/api/auth/profile", requireDatabase, authenticate, asyncRoute(async (req, res) => {
-  const { name, email } = req.body || {};
+  const { name, email, profileImage } = req.body || {};
   if (typeof name !== "string" || name.trim().length < 2 || name.trim().length > 80) return res.status(400).json({ message: "Enter a name between 2 and 80 characters." });
   if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: "Enter a valid email address." });
+  if (Object.hasOwn(req.body, "profileImage") && profileImage !== null && !isValidProfileImage(profileImage)) {
+    return res.status(400).json({ message: "Choose a valid JPEG profile photo under 180 KB." });
+  }
   const normalizedEmail = email.trim().toLowerCase();
   if (await User.exists({ email: normalizedEmail, _id: { $ne: req.user.id } })) return res.status(409).json({ message: "That email is already in use." });
   req.user.name = name.trim();
   req.user.email = normalizedEmail;
+  if (Object.hasOwn(req.body, "profileImage")) req.user.profileImage = profileImage || "";
   await req.user.save();
   return res.json({ user: publicUser(req.user) });
 }));

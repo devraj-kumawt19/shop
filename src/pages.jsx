@@ -2,9 +2,9 @@ import { VariantEditor } from "./AdvancedAdmin.jsx";
 import { MarketplaceStrip } from "./DealsPage.jsx";
 import { OrderExtras } from "./CommerceWidgets.jsx";
 import { can } from "../server/permissions.js";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowUpRight, ArrowLeft, ArrowRight, Check, ChevronRight, Heart, Minus, PackageCheck, Plus, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Star, Tag, Truck } from "lucide-react";
+import { ArrowUpRight, ArrowLeft, ArrowRight, Camera, Check, ChevronRight, Heart, LoaderCircle, Mail, Minus, PackageCheck, Plus, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Star, Tag, Trash2, Truck, UserRound } from "lucide-react";
 import api, { getErrorMessage } from "./api.js";
 import { categories } from "./data.js";
 import { useCategories, useProduct, useProducts } from "./hooks/useProducts.js";
@@ -16,6 +16,45 @@ import { payForOrder } from "./payment.js";
 
 const orderTotalLabel = (orders) => { const totals = {}; for (const order of orders.filter((item) => !["cancelled", "awaiting_payment"].includes(item.status))) { const currency = order.currency || "USD"; totals[currency] = (totals[currency] || 0) + order.total; } return Object.entries(totals).map(([currency, total]) => formatMoney(total, currency)).join(" / ") || "-"; };
 const subtotalFor = (cart) => cart.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
+
+async function prepareProfilePhoto(file) {
+  const maxInputBytes = 5 * 1024 * 1024;
+  const maxOutputBytes = 180 * 1024;
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    throw new Error("Choose a JPG, PNG, or WebP photo.");
+  }
+  if (file.size > maxInputBytes) throw new Error("Choose a photo smaller than 5 MB.");
+
+  const bitmap = await createImageBitmap(file);
+  try {
+    const maxDimension = 512;
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Your browser couldn't prepare this photo. Try another image.");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    for (const quality of [0.84, 0.72, 0.6, 0.48]) {
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Your browser couldn't prepare this photo. Try another image.")), "image/jpeg", quality);
+      });
+      if (blob.size > maxOutputBytes) continue;
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Your browser couldn't read this photo. Try another image."));
+        reader.onerror = () => reject(new Error("Your browser couldn't read this photo. Try another image."));
+        reader.readAsDataURL(blob);
+      });
+    }
+    throw new Error("This photo is still too large. Try a smaller image.");
+  } finally {
+    bitmap.close();
+  }
+}
 
 export function HomePage() {
   const money = useMoney();
@@ -186,27 +225,131 @@ export function OrderDetailsPage() {
 }
 
 export function ProfilePage() {
-  const { user, refreshUser } = useShop();
+  const { user, updateProfile } = useShop();
+  const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "" });
+  const [profileImage, setProfileImage] = useState(user?.profileImage || "");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  useEffect(() => { refreshUser(); }, [refreshUser]);
+  const [processingPhoto, setProcessingPhoto] = useState(false);
+  const photoInput = useRef(null);
+  const isDirty = form.name !== (user?.name || "") || form.email !== (user?.email || "") || profileImage !== (user?.profileImage || "");
+
+  useEffect(() => {
+    setForm({ name: user?.name || "", email: user?.email || "" });
+    setProfileImage(user?.profileImage || "");
+  }, [user?.name, user?.email, user?.profileImage]);
+
+  function changeField(event) {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+    setNotice("");
+    setError("");
+  }
+
+  function resetForm() {
+    setForm({ name: user?.name || "", email: user?.email || "" });
+    setProfileImage(user?.profileImage || "");
+    setNotice("");
+    setError("");
+  }
+
+  async function selectPhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setProcessingPhoto(true);
+    setNotice("");
+    setError("");
+    try {
+      setProfileImage(await prepareProfilePhoto(file));
+      setNotice("Photo ready. Save your changes to update your profile.");
+    } catch (photoError) {
+      setError(photoError.message || "That photo couldn't be prepared. Please try another.");
+    } finally {
+      setProcessingPhoto(false);
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     setSaving(true);
     setError("");
     setNotice("");
     try {
-      await api.patch("/auth/profile", Object.fromEntries(new FormData(event.currentTarget)));
-      refreshUser();
-      setNotice("Your profile is all up to date.");
+      const updatedUser = await updateProfile({ name: form.name.trim(), email: form.email.trim(), profileImage: profileImage || null });
+      setForm({ name: updatedUser.name, email: updatedUser.email });
+      setProfileImage(updatedUser.profileImage || "");
+      setNotice("Your details are saved and up to date.");
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
       setSaving(false);
     }
   }
-  return <RequireAuth><main id="main-content" className="page-width account-page profile-page"><div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><span>Your account</span></div><div className="section-heading"><div><span className="eyebrow">A LITTLE SPACE THAT’S YOURS</span><h1>Hello, <em>{user?.name.split(" ")[0]}.</em></h1></div><Link to="/my-orders" className="subtle-link">Your orders <ArrowRight size={15} /></Link></div><div className="profile-card"><div className="profile-avatar">{user?.name?.charAt(0).toUpperCase()}</div><div><span className="eyebrow">YOUR DETAILS</span><h2>Make yourself at home.</h2><p>Update the details we use to make your ShopSphere experience yours.</p></div></div>{notice && <StatusMessage tone="success">{notice}</StatusMessage>}{error && <StatusMessage tone="error">{error}</StatusMessage>}<form className="profile-form form-stack" onSubmit={submit}><label>Your name<input name="name" defaultValue={user?.name} minLength="2" required /></label><label>Email address<input name="email" type="email" defaultValue={user?.email} required /></label><button className="button button-dark" disabled={saving}>{saving ? "Saving..." : "Save your details"} <Check size={16} /></button></form></main></RequireAuth>;
+  const initials = (user?.name || "").trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("");
+
+  return <RequireAuth>
+    <main id="main-content" className="page-width account-page profile-page">
+      <div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><span>Your account</span></div>
+      <div className="section-heading profile-heading">
+        <div><span className="eyebrow">A LITTLE SPACE THAT’S YOURS</span><h1>Your <em>details.</em></h1><p>Keep your account details current, so every visit feels like yours.</p></div>
+        <Link to="/my-orders" className="subtle-link">Your orders <ArrowRight size={15} /></Link>
+      </div>
+
+      <div className="profile-layout">
+        <section className="profile-editor">
+          <div className="profile-editor-heading">
+            <span className="profile-section-icon"><UserRound size={19} /></span>
+            <div><span className="eyebrow">PERSONAL INFORMATION</span><h2>Make it yours.</h2><p>These details are used for your account and order updates.</p></div>
+          </div>
+
+          {notice && <StatusMessage tone="success">{notice}</StatusMessage>}
+          {error && <StatusMessage tone="error">{error}</StatusMessage>}
+
+          <form className="profile-form" onSubmit={submit} aria-busy={saving}>
+            <label className="profile-field" htmlFor="profile-name">Full name
+              <span className="profile-input-wrap"><UserRound size={17} aria-hidden="true" /><input id="profile-name" name="name" value={form.name} onChange={changeField} placeholder="Your full name" autoComplete="name" minLength="2" maxLength="80" required disabled={saving} /></span>
+            </label>
+            <label className="profile-field" htmlFor="profile-email">Email address
+              <span className="profile-input-wrap"><Mail size={17} aria-hidden="true" /><input id="profile-email" name="email" type="email" value={form.email} onChange={changeField} placeholder="you@example.com" autoComplete="email" maxLength="254" required disabled={saving} /></span>
+            </label>
+            <p className="profile-form-hint"><ShieldCheck size={15} /> Your details stay private and are only used to manage your account.</p>
+            <div className="profile-form-actions">
+              <button type="button" className="button profile-reset-button" onClick={resetForm} disabled={saving || processingPhoto || !isDirty}>Discard changes</button>
+              <button type="submit" className="button button-dark" disabled={saving || processingPhoto || !isDirty}>{saving ? "Saving changes..." : "Save changes"} <Check size={16} /></button>
+            </div>
+          </form>
+        </section>
+
+        <aside className="profile-sidebar">
+          <section className="profile-identity-card">
+            <div className="profile-identity-top"><span className="eyebrow">YOUR ACCOUNT</span><span className="profile-secure-tag"><ShieldCheck size={13} /> Secure</span></div>
+            <div className="profile-identity">
+              <div className="profile-avatar" aria-hidden="true">{profileImage ? <img src={profileImage} alt="" /> : initials || <UserRound size={23} />}</div>
+              <div className="profile-identity-copy"><h2>{user?.name}</h2><p>{user?.email}</p></div>
+            </div>
+            <input ref={photoInput} className="profile-photo-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={selectPhoto} disabled={saving || processingPhoto} aria-label="Choose profile photo" />
+            <div className="profile-photo-actions">
+              <button type="button" className="profile-photo-button" onClick={() => photoInput.current?.click()} disabled={saving || processingPhoto}>
+                {processingPhoto ? <LoaderCircle size={14} className="profile-photo-spinner" /> : <Camera size={14} />}
+                {processingPhoto ? "Preparing photo..." : profileImage ? "Change photo" : "Add a photo"}
+              </button>
+              {profileImage && <button type="button" className="profile-photo-remove" onClick={() => { setProfileImage(""); setNotice("Photo removed. Save your changes to update your profile."); setError(""); }} disabled={saving || processingPhoto}><Trash2 size={13} /> Remove</button>}
+            </div>
+            <p className="profile-photo-hint">JPG, PNG or WebP · up to 5 MB</p>
+            <div className="profile-account-type"><span /> ShopSphere member</div>
+          </section>
+
+          <section className="profile-links-card">
+            <span className="eyebrow">YOUR SHOPSPHERE</span>
+            <Link to="/my-orders"><span className="profile-link-icon"><PackageCheck size={17} /></span><span><strong>Order history</strong><small>Check in on your recent orders</small></span><ArrowRight size={15} /></Link>
+            <Link to="/wishlist"><span className="profile-link-icon"><Heart size={17} /></span><span><strong>Saved favorites</strong><small>All the good things you’ve saved</small></span><ArrowRight size={15} /></Link>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </RequireAuth>;
 }
 
 export function AdminPage({ embedded = false, initialTab = "products" }) {

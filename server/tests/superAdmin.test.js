@@ -11,7 +11,7 @@ process.env.JWT_SECRET = "test-only-secret-for-super-admin-tests-at-least-32-cha
 const { app } = await import("../index.js");
 const ids = { owner: "aaaaaaaaaaaaaaaaaaaaaaaa", admin: "bbbbbbbbbbbbbbbbbbbbbbbb", customer: "cccccccccccccccccccccccc", blocked: "dddddddddddddddddddddddd" };
 let server, base, users, stored, activity;
-const account = (key, role, isActive = true) => ({ id: ids[key], _id: ids[key], name: key, email: `${key}@example.test`, role, isActive, createdAt: new Date().toISOString() });
+const account = (key, role, isActive = true) => ({ id: ids[key], _id: ids[key], name: key, email: `${key}@example.test`, role, isActive, createdAt: new Date().toISOString(), save: async function () { users[this.id] = this; } });
 const token = (key, role) => jwt.sign({ sub: ids[key], role }, process.env.JWT_SECRET);
 async function request(path, { key, role, method = "GET", body } = {}) {
   const response = await fetch(`${base}/api${path}`, {
@@ -65,7 +65,7 @@ test("login verifies the password and returns a signed bearer token", async () =
   users[ids.customer].checkPassword = async (password) => password === "correct-password";
   const result = await request("/auth/login", { method: "POST", body: { email: "CUSTOMER@example.test", password: "correct-password" } });
   assert.equal(result.status, 200);
-  assert.deepEqual(result.body.user, { id: ids.customer, name: "customer", email: "customer@example.test", role: "customer" });
+  assert.deepEqual(result.body.user, { id: ids.customer, name: "customer", email: "customer@example.test", role: "customer", profileImage: "" });
   assert.equal(result.body.user.password, undefined);
   const payload = jwt.verify(result.body.token, process.env.JWT_SECRET);
   assert.equal(payload.sub, ids.customer);
@@ -79,6 +79,39 @@ test("public registration cannot inject super admin role or blocked status", asy
   assert.equal(result.status, 201);
   assert.equal(result.body.user.role, "customer");
   assert.equal(users[result.body.user.id].isActive, undefined);
+});
+test("customers can save and retrieve a validated profile photo", async () => {
+  const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 1, 2, 3, 0xff, 0xd9]);
+  const profileImage = `data:image/jpeg;base64,${imageBytes.toString("base64")}`;
+  const result = await request("/auth/profile", { key: "customer", method: "PATCH", body: { name: "Customer Name", email: "CUSTOMER@example.test", profileImage } });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.user.profileImage, profileImage);
+  assert.equal(result.body.user.email, "customer@example.test");
+  assert.equal(users[ids.customer].profileImage, profileImage);
+  assert.equal(result.body.user.password, undefined);
+});
+test("customers can remove their profile photo", async () => {
+  users[ids.customer].profileImage = "data:image/jpeg;base64,old-photo";
+  const result = await request("/auth/profile", { key: "customer", method: "PATCH", body: { name: "customer", email: "customer@example.test", profileImage: null } });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.user.profileImage, "");
+  assert.equal(users[ids.customer].profileImage, "");
+});
+test("profile photo updates reject malformed and oversized image data", async () => {
+  const prefix = "data:image/jpeg;base64,";
+  const oversizedBytes = Buffer.alloc(180 * 1024 + 1);
+  oversizedBytes.set([0xff, 0xd8, 0xff]);
+  oversizedBytes.set([0xff, 0xd9], oversizedBytes.length - 2);
+  const invalidImages = [
+    "data:image/png;base64,iVBORw0KGgo=",
+    `${prefix}not-base64`,
+    `${prefix}${oversizedBytes.toString("base64")}`,
+  ];
+  for (const profileImage of invalidImages) {
+    const result = await request("/auth/profile", { key: "customer", method: "PATCH", body: { name: "customer", email: "customer@example.test", profileImage } });
+    assert.equal(result.status, 400);
+  }
+  assert.equal(users[ids.customer].profileImage, undefined);
 });
 test("super admin can update customer access; blocking takes effect on existing tokens", async () => {
   assert.equal((await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { role: "admin" } })).status, 200);

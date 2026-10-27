@@ -79,7 +79,7 @@ export default function Header() {
           <Link className="signature-icon signature-wishlist" aria-label={`Wishlist${wishlist.length ? `, ${wishlist.length} saved items` : ""}`} to="/wishlist"><Heart size={18} />{wishlist.length > 0 && <span className="signature-count">{wishlist.length}</span>}</Link>
           <span className="signature-divider" aria-hidden="true" />
           {workspace && <Link className="signature-icon workspace-shortcut" title="Admin dashboard" aria-label="Admin dashboard" to={workspace}><ShieldCheck size={18} /></Link>}
-          <Link className="signature-account" aria-label={user ? "Your account" : "Sign in"} to={user ? "/profile" : "/login"}><UserRound size={16} /><span>{user ? user.name.split(" ")[0] : "Sign in"}</span></Link>
+          <Link className="signature-account" aria-label={user ? "Your account" : "Sign in"} to={user ? "/profile" : "/login"}>{user?.profileImage ? <img className="signature-account-avatar" src={user.profileImage} alt="" /> : <UserRound size={16} />}<span>{user ? user.name.split(" ")[0] : "Sign in"}</span></Link>
           {user && <button className="signature-icon signature-logout" aria-label="Sign out" title="Sign out" onClick={logout}><LogOut size={16} /></button>}
           <Link className="signature-bag" to="/cart" aria-label={`Shopping bag, ${bagCount} ${bagCount === 1 ? "item" : "items"}`}><ShoppingBag size={17} /><span>Your bag</span><b key={bagCount}>{bagCount}</b></Link>
         </div>

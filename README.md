@@ -1,6 +1,6 @@
 # ShopSphere
 
-ShopSphere is a React/Vite single-page storefront with a separate Express API. Product browsing, search, category filters, cart, wishlist, registration, sign-in, profile, cash-on-delivery checkout, order history, and an admin console are included.
+ShopSphere is a React/Vite single-page storefront with a separate Express API. Product browsing, search, category filters, cart, wishlist, registration, sign-in, profile details and profile photos, cash-on-delivery checkout, order history, and an admin console are included. Profile photos are resized to JPEG in the browser and stored on the user's MongoDB record with an 180 KB limit.
 
 ## Requirements
 
