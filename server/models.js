@@ -33,6 +33,7 @@ const productSchema = new Schema({
   reviewCount: { type: Number, default: 0, min: 0 },
   badge: { type: String, default: "", maxlength: 32 },
   featured: { type: Boolean, default: false },
+  quickEligible: { type: Boolean, default: false },
   isDemo: { type: Boolean, default: false },
   variants: [{ sku: { type: String, required: true }, size: String, color: String, price: { type: Number, required: true, min: 0 }, stock: { type: Number, required: true, min: 0 } }],
 }, { timestamps: true });
@@ -77,8 +78,11 @@ const orderSchema = new Schema({
   shipping: { type: Number, required: true },
   total: { type: Number, required: true },
   currency: { type: String, enum: ["USD", "INR"], default: "USD" },
-  paymentMethod: { type: String, enum: ["cash_on_delivery", "razorpay"], default: "cash_on_delivery" },
-  paymentStatus: { type: String, enum: ["pending", "paid", "refund_required"], default: "pending" },
+  paymentMethod: { type: String, enum: ["cash_on_delivery", "razorpay", "wallet"], default: "cash_on_delivery" },
+  paymentStatus: { type: String, enum: ["pending", "paid", "refund_required", "refunded"], default: "pending" },
+  checkoutKey: { type: String },
+  deliveryMethod: { type: String, enum: ["standard", "express15"], default: "standard" },
+  estimatedDeliveryAt: Date,
   gatewayOrderId: { type: String, unique: true, sparse: true },
   gatewayPaymentId: { type: String, unique: true, sparse: true },
   paymentCreatingAt: Date,
@@ -90,6 +94,7 @@ const orderSchema = new Schema({
   timeline: [{ status: String, message: String, location: String, at: { type: Date, default: Date.now } }],
   status: { type: String, enum: ["awaiting_payment", "placed", "processing", "shipped", "delivered", "cancelled"], default: "placed" },
 }, { timestamps: true });
+orderSchema.index({ user: 1, checkoutKey: 1 }, { unique: true, partialFilterExpression: { checkoutKey: { $type: "string" } } });
 
 export const User = mongoose.models.User || model("User", userSchema);
 export const Product = mongoose.models.Product || model("Product", productSchema);
@@ -143,3 +148,12 @@ export const Review = mongoose.models.Review || model("Review", reviewSchema);
 export const ProductAlert = mongoose.models.ProductAlert || model("ProductAlert", alertSchema);
 export const Inbox = mongoose.models.Inbox || model("Inbox", inboxSchema);
 export const CartState = mongoose.models.CartState || model("CartState", cartSchema);
+
+const walletSchema = new Schema({ user: { type: Schema.Types.ObjectId, ref: "User", required: true, unique: true }, currency: { type: String, enum: ["INR"], default: "INR" }, balanceMinor: { type: Number, default: 0, min: 0, max: Number.MAX_SAFE_INTEGER } }, { timestamps: true });
+const walletEntrySchema = new Schema({ key: { type: String, required: true, unique: true }, user: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true }, amountMinor: { type: Number, required: true }, balanceAfterMinor: { type: Number, required: true, min: 0 }, kind: { type: String, enum: ["topup", "purchase", "refund"], required: true }, description: String, order: { type: Schema.Types.ObjectId, ref: "Order" }, topup: { type: Schema.Types.ObjectId, ref: "WalletTopup" }, currency: { type: String, default: "INR" } }, { timestamps: true });
+walletEntrySchema.index({ user: 1, createdAt: -1 });
+const topupSchema = new Schema({ user: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true }, amountMinor: { type: Number, required: true }, currency: { type: String, enum: ["INR"], default: "INR" }, requestKey: { type: String, required: true }, gatewayOrderId: { type: String, unique: true, sparse: true }, gatewayPaymentId: { type: String, unique: true, sparse: true }, paymentCreatingAt: Date, status: { type: String, enum: ["pending", "paid"], default: "pending" }, paidAt: Date }, { timestamps: true });
+topupSchema.index({ user: 1, requestKey: 1 }, { unique: true });
+export const Wallet = mongoose.models.Wallet || model("Wallet", walletSchema);
+export const WalletEntry = mongoose.models.WalletEntry || model("WalletEntry", walletEntrySchema);
+export const WalletTopup = mongoose.models.WalletTopup || model("WalletTopup", topupSchema);

@@ -1,0 +1,379 @@
+.wallet-page{padding-top:25px;padding-bottom:75px}
+.wallet-heading{display:flex;justify-content:space-between;align-items:center;margin:38px 0 35px}
+.wallet-heading h1{font-size:clamp(32px,4vw,50px);letter-spacing:-2px;line-height:1.2;margin:15px 0}
+.wallet-heading h1 em{font-style:normal;color:var(--blue)}
+.wallet-heading p{color:#7d8da7;font-size:13px}
+.wallet-heading-icon{display:grid;place-items:center;width:100px;height:100px;border:1px solid #e0eafa;border-radius:28px;color:#8caddf;background:#f4f8ff;transform:rotate(8deg)}
+.wallet-layout{display:grid;grid-template-columns:1.55fr 1fr;gap:30px}
+.wallet-balance-card{position:relative;overflow:hidden;border-radius:25px;padding:34px;color:white;background:linear-gradient(125deg,#132e61,#2058bc 70%,#3985f0);box-shadow:0 18px 40px #144b9b20;min-height:312px}
+.wallet-card-top{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}
+.wallet-card-top>span{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:700;letter-spacing:2px}
+.wallet-balance-label{display:block;font-size:9px;letter-spacing:2px;margin-top:36px;color:#a7c4f3;position:relative;z-index:1}
+.wallet-balance-card>strong{display:block;font-size:clamp(35px,4vw,54px);letter-spacing:-1px;margin:9px 0;position:relative;z-index:1}
+.wallet-balance-card>p{font-size:11px;color:#a9c4ee;margin:0}
+.wallet-card-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:32px;position:relative;z-index:1}
+.wallet-card-bottom>span:first-child{font-size:12px}
+.wallet-card-bottom small{display:block;font-size:9px;color:#a1bde8;margin-top:7px}
+.wallet-card-mark{font-size:32px;font-weight:800;color:#fff;position:relative}
+.wallet-card-mark>span{font-size:10px;color:#bed9ff;position:absolute;top:-7px;right:-10px}
+.wallet-ring{position:absolute;border:1px solid #ffffff12;border-radius:50%;width:380px;height:380px;right:-170px;top:-70px;pointer-events:none}
+.wallet-ring.ring-two{width:270px;height:270px;right:-115px;top:-20px;border:35px solid #ffffff04}
+.wallet-benefits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;padding:28px 4px}
+.wallet-benefits svg{color:#5b81be;margin-bottom:13px}
+.wallet-benefits strong{display:block;font-size:12px;color:#3e587f}
+.wallet-benefits p{font-size:10px;line-height:1.8;color:#8a99b0;margin:8px 0}
+.wallet-discover{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;background:#f1f6ff;border:1px solid #e0eafd;border-radius:14px;color:var(--blue)}
+.wallet-discover small{display:block;font-size:8px;letter-spacing:1.2px;margin-bottom:8px;color:#8199bc}
+.wallet-discover strong{font-size:14px}
+.wallet-topup{border:1px solid #e1e9f5;border-radius:23px;padding:30px;align-self:start;background:#fff}
+.topup-icon{display:grid;place-items:center;background:#eef4ff;border-radius:12px;width:42px;height:42px;color:var(--blue);margin-bottom:20px}
+.wallet-topup h2{font-size:23px;letter-spacing:-.8px;margin:0 0 12px}
+.wallet-topup>p{font-size:12px;color:#8695ac;line-height:1.8;margin-bottom:25px}
+.wallet-topup form>label{font-size:11px;font-weight:600;color:#647c9f;display:block;margin-bottom:9px}
+.wallet-amount-input{display:flex;align-items:center;gap:8px;border:1px solid #dfe7f4;padding:14px 17px;background:#fcfdff;border-radius:11px}
+.wallet-amount-input>span{font-size:25px;color:#91a6c6}
+.wallet-amount-input input{width:100%;min-width:0;outline:0;border:0;background:transparent;font-size:30px;font-weight:700;color:#25446f}
+.wallet-amount-input:focus-within{outline:2px solid #2563eb30}
+.wallet-amount-presets{display:flex;gap:8px;margin:14px 0 22px;flex-wrap:wrap}
+.wallet-amount-presets button{flex:1;border:1px solid #e0e8f4;color:#7a90b2;background:#f8fbff;padding:9px 5px;border-radius:6px;font-size:10px;cursor:pointer}
+.wallet-amount-presets button[aria-pressed=true]{background:#edf4ff;border-color:#8eaff0;color:var(--blue)}
+.wallet-topup .button{font-size:12px}
+.wallet-topup-note{display:flex;gap:10px;border-top:1px solid #e5edf7;padding-top:21px;margin-top:23px;color:#94a4bc;font-size:10px;line-height:1.7}
+.wallet-topup-note svg{flex-shrink:0}
+.wallet-use-note{font-size:9px;color:#9baac0;line-height:1.7;display:block;margin-top:13px}
+.wallet-history{border:1px solid #e1e9f5;border-radius:20px;padding:27px;margin-top:30px}
+.wallet-history h2{font-size:21px;margin:10px 0}
+.wallet-transactions article{display:flex;gap:17px;align-items:center;padding:21px 0;border-bottom:1px solid #eaf0f8}
+.wallet-transactions article:last-child{border:0}
+.wallet-activity-icon{width:40px;height:40px;border-radius:12px;background:#eef3fc;color:#6c86ae;display:grid;place-items:center;flex-shrink:0}
+.wallet-activity-icon.credit{color:#259268;background:#edf9f2}
+.wallet-transactions article>div{flex:1}
+.wallet-transactions strong{display:block;font-size:12px;font-weight:600;color:#466187}
+.wallet-transactions small{display:block;font-size:10px;color:#94a5bc;margin-top:7px}
+.wallet-transactions article>div>a{display:flex;align-items:center;gap:4px;color:var(--blue);font-size:10px;margin-top:8px}
+.wallet-transactions article>span:last-child{text-align:right}
+.wallet-transactions .wallet-credit strong{color:#259268}
+.wallet-pending{display:flex;justify-content:space-between;padding:16px 0;border-top:1px solid #e7edf7;gap:16px}
+.wallet-pending strong{font-size:14px}
+.wallet-pending small{display:block;color:#91a2bc;font-size:10px;margin-top:6px}
+.wallet-pending .button{font-size:10px}
+.checkout-wallet-link{display:flex;gap:6px;align-items:center;color:var(--blue);font-size:11px;margin:7px 0 20px}
+.checkout-delivery-note{font-size:10px;color:#94a3bb;line-height:1.7}
+.quick-order-estimate{display:flex;flex-direction:column;gap:8px;background:#f2f8e6;border:1px solid #e2eccd;color:#5b702f;padding:18px;border-radius:12px;margin:18px 0}
+.quick-order-estimate strong{font-size:13px}
+.quick-order-estimate span{font-size:12px}
+.quick-order-estimate small{font-size:10px;color:#8b9b6d}
+.quick-product-label{display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:600;color:#618229;background:#f0f7df;border-radius:4px;padding:4px 6px;margin:5px 0}
+.marketplace-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding-top:20px;padding-bottom:20px}
+.marketplace-strip>a{border:1px solid #e0e9f8;background:linear-gradient(120deg,#f7faff,#eef5ff);display:flex;gap:12px;align-items:center;padding:18px;border-radius:13px;color:#4e70a4;transition:transform .2s,box-shadow .2s}
+.marketplace-strip>a:hover{transform:translateY(-3px);box-shadow:0 7px 20px #2a61b30c}
+.marketplace-strip>a:nth-child(2){background:linear-gradient(120deg,#f8fbe9,#f3f8e8);border-color:#e4ebcf;color:#678139}
+.marketplace-strip>a:nth-child(3){background:linear-gradient(120deg,#f8f6ff,#f1edff);border-color:#e8e1f7;color:#8370b4}
+.marketplace-strip>a>span{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:#ffffffa0;flex-shrink:0}
+.marketplace-strip>a>div{flex:1;min-width:0}
+.marketplace-strip small{font-size:7px;font-weight:700;letter-spacing:1px;display:block;margin-bottom:7px}
+.marketplace-strip strong{font-size:11px;font-weight:600;display:block;line-height:1.5}
+.deals-page{padding-top:24px;padding-bottom:60px}
+.festival-hero{position:relative;overflow:hidden;border-radius:28px;min-height:460px;display:grid;grid-template-columns:1.25fr 1fr;align-items:center;background:linear-gradient(112deg,#10285b,#154093 66%,#215cc2);color:white;margin:28px 0 0;padding:46px 50px;isolation:isolate}
+.festival-grid{position:absolute;inset:0;background-image:linear-gradient(#ffffff04 1px,transparent 1px),linear-gradient(90deg,#ffffff04 1px,transparent 1px);background-size:48px 48px;z-index:-1}
+.festival-kicker{display:flex;gap:8px;align-items:center;font-size:8px;letter-spacing:2px;color:#c1d7ff;font-weight:600}
+.festival-kicker>span{width:6px;height:6px;border-radius:50%;background:#e8f99b;box-shadow:0 0 0 4px #e8f99b15}
+.festival-copy h1{font-size:clamp(32px,4.1vw,57px);letter-spacing:-2.6px;line-height:1.13;margin:23px 0 18px;font-weight:800}
+.festival-copy h1 em{color:#e1f79d;font-style:normal}
+.festival-copy>p{font-size:12px;color:#adc7ef;max-width:370px;line-height:1.8;margin:0 0 18px}
+.festival-badges{display:flex;gap:18px;color:#a6c1ea;font-size:9px;flex-wrap:wrap}
+.festival-badges>span{display:flex;align-items:center;gap:5px}
+.festival-button{display:inline-flex;align-items:center;gap:24px;background:#e1f79d;color:#203f35;border:1px solid #efffc1;padding:15px 23px;border-radius:9px;font-size:11px;font-weight:700;margin-top:25px;transition:transform .2s}
+.festival-button:hover{transform:translateY(-2px)}
+.sale-clock{display:flex;align-items:center;gap:8px;margin-top:25px}
+.sale-clock>small{font-size:7px;letter-spacing:1.5px;color:#93b3e4;max-width:45px;line-height:1.8;margin-right:3px}
+.sale-clock>span{display:flex;flex-direction:column;align-items:center;background:#ffffff0b;border:1px solid #ffffff18;border-radius:7px;min-width:43px;padding:9px 6px 6px}
+.sale-clock strong{font-size:17px;font-weight:600}
+.sale-clock span small{font-size:6px;letter-spacing:1px;color:#9ab8e7;margin-top:5px}
+.sale-clock-label{display:flex;align-items:center;gap:7px;font-size:9px;color:#89abe0;margin-top:23px}
+.festival-art{position:relative;display:grid;place-items:center;min-height:340px}
+.festival-offer{width:260px;height:280px;background:#e6f4bb;color:#173960;border-radius:31px;text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;transform:rotate(9deg);box-shadow:-12px 14px 0 #e6f4bb18,0 25px 70px #081d5040;border:1px solid #f2ffd5}
+.festival-offer>small{font-size:7px;letter-spacing:1.5px;color:#698268;margin-bottom:15px}
+.festival-offer>span{font-size:12px;letter-spacing:5px}
+.festival-offer>strong{font-size:91px;font-weight:800;line-height:1;letter-spacing:-7px;margin:9px 0}
+.festival-offer>b{font-size:22px;font-weight:700;letter-spacing:10px}
+.festival-offer>p{font-size:9px;color:#7a8c70;margin:15px 0 0}
+.sale-spark{position:absolute;font-size:55px;color:#d6ed93}
+.sale-spark.spark-one{top:3px;right:10px;transform:rotate(15deg)}
+.sale-spark.spark-two{bottom:3px;left:12px;font-size:38px;color:#7ca4e7}
+.festival-ticket{position:absolute;right:0;bottom:15px;padding:13px 17px;background:white;border-radius:8px;display:flex;align-items:center;gap:8px;color:#4f74ae;font-size:9px;box-shadow:0 8px 20px #0b214c25;transform:rotate(-8deg)}
+.festival-mini-card{display:flex;gap:9px;align-items:center;position:absolute;top:35px;left:-10px;background:#fff;border-radius:10px;padding:13px 17px;color:#3b68a9;font-size:9px;line-height:1.7;box-shadow:0 10px 25px #071d4b20;transform:rotate(-10deg)}
+.festival-mini-card svg{color:#a5b46d}
+.festival-mini-card b{color:#8c9db6;font-weight:400}
+.festival-perks{display:flex;align-items:center;justify-content:space-around;border:1px solid #e2e9f3;border-top:0;border-radius:0 0 16px 16px;padding:21px 15px;margin:0 20px 40px;gap:15px}
+.festival-perks>span,.festival-perks>a{display:flex;gap:10px;align-items:center;color:#88a0c1}
+.festival-perks strong{font-size:10px;color:#6a80a0;font-weight:500}
+.sale-coupons{margin:50px 0}
+.sale-coupons .section-heading>span{font-size:10px;color:#90a1ba}
+.sale-coupons>div:last-child{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
+.sale-coupons article{display:flex;align-items:center;gap:12px;background:#f6faff;border:1px dashed #bcd0f2;border-radius:12px;padding:18px;position:relative}
+.sale-coupons article:before,.sale-coupons article:after{content:"";width:10px;height:10px;background:white;border-radius:50%;position:absolute;top:calc(50% - 5px);border:1px solid #e1e9f5}
+.sale-coupons article:before{left:-6px}
+.sale-coupons article:after{right:-6px}
+.coupon-offer-icon{color:#81a5de;flex-shrink:0}
+.sale-coupons article>div{flex:1}
+.sale-coupons article strong{display:block;font-size:15px;color:#365c96}
+.sale-coupons article small{display:block;font-size:8px;line-height:1.8;color:#8ba0bd;margin-top:5px}
+.sale-coupons article button{background:white;border:1px dashed #afc5e8;border-radius:5px;color:#4774b5;font-size:8px;letter-spacing:1px;padding:9px;cursor:pointer;max-width:130px;overflow-wrap:anywhere}
+.sale-category-section{margin:55px 0}
+.sale-category-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:17px}
+.sale-category-tile{position:relative;border:1px solid #f0e4d7;border-radius:17px;overflow:hidden;padding:24px 20px;text-align:left;height:190px;background:#f5ecdf;color:#5f543f;cursor:pointer;transition:transform .2s}
+.sale-category-tile>span{position:relative;z-index:1;font-size:14px;font-weight:700;display:block}
+.sale-category-tile small{display:block;font-size:10px;margin-top:8px;font-weight:500;color:#9a8d77}
+.sale-category-tile>img{position:absolute;width:125px;height:125px;bottom:-10px;right:0;border-radius:50%;object-fit:cover;transform:rotate(-12deg);box-shadow:-10px -3px 0 #ffffff45}
+.sale-category-tile>svg{position:absolute;left:20px;bottom:22px}
+.sale-category-tile:hover{transform:translateY(-4px)}
+.sale-category-tile.tile-1{background:#eaf1fc;border-color:#dce7f7;color:#405d89}
+.sale-category-tile.tile-1 small{color:#7d98be}
+.sale-category-tile.tile-2{background:#f5eaf0;border-color:#eddee7;color:#8e5e76}
+.sale-category-tile.tile-2 small{color:#b193a2}
+.sale-category-tile.tile-3{background:#eef4e5;border-color:#e2ead6;color:#617944}
+.sale-category-tile.tile-3 small{color:#95a381}
+.deal-spotlight{position:relative;display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:30px;border:1px solid #e0e9f7;border-radius:22px;padding:52px 50px 35px;background:linear-gradient(110deg,#f3f7ff,white);margin:55px 0;overflow:hidden}
+.spotlight-tag{position:absolute;left:50px;top:24px;display:flex;align-items:center;gap:7px;font-size:8px;font-weight:700;letter-spacing:1.4px;color:#6e91c6}
+.spotlight-copy h2{font-size:33px;letter-spacing:-1.2px;line-height:1.2;margin:22px 0 13px}
+.spotlight-copy h2 em{font-style:normal;color:var(--blue)}
+.spotlight-copy>p{font-size:12px;color:#7c91b1}
+.spotlight-copy>div{display:flex;align-items:center;gap:12px;margin:22px 0}
+.spotlight-copy>div>strong{font-size:28px;color:#345c98;letter-spacing:-1px}
+.spotlight-copy del{font-size:12px;color:#94a6bf}
+.spotlight-copy b{font-size:8px;background:#e8f3d9;color:#638538;padding:6px 8px;border-radius:5px}
+.spotlight-copy .button{font-size:11px}
+.spotlight-image{justify-self:center;width:260px;height:260px;display:block;transform:rotate(5deg);border:10px solid white;border-radius:22px;box-shadow:0 20px 50px #385b8d10}
+.spotlight-image>img{width:100%;height:100%;object-fit:cover;border-radius:13px}
+.spotlight-sticker{position:absolute;bottom:20px;right:35px;border-radius:50%;width:87px;height:87px;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#dff2b3;color:#506e36;transform:rotate(12deg);font-size:11px;letter-spacing:1px}
+.spotlight-sticker b{font-size:19px}
+.sale-product-section{padding-top:35px;scroll-margin-top:120px}
+.sale-product-section h2,.sale-category-section h2,.sale-coupons h2{font-size:29px;letter-spacing:-1px}
+.sale-product-section .eyebrow{display:flex;align-items:center;gap:6px}
+.sale-sort,.sale-filter-bar>label{display:flex;align-items:center;gap:9px;font-size:10px;color:#8ca0bd}
+.sale-sort select,.sale-filter-bar select{background:white;border:1px solid #e1e9f6;border-radius:7px;padding:10px;font-size:10px;color:#607fae}
+.sale-filter-bar{display:flex;justify-content:space-between;gap:20px;padding:14px;background:#f5f8fe;border:1px solid #e4ecf8;border-radius:13px;margin:25px 0}
+.sale-filter-bar>div{display:flex;gap:7px;flex-wrap:wrap}
+.sale-filter-bar button{border:1px solid transparent;border-radius:8px;padding:10px 13px;font-size:10px;color:#7e94b5;background:transparent;cursor:pointer}
+.sale-filter-bar button.active{background:white;color:var(--blue);border-color:#dbe6fa;box-shadow:0 2px 7px #365d8f07}
+.quick-promo{display:flex;align-items:center;gap:25px;background:#f2f7e7;border:1px solid #e1e9d2;border-radius:20px;padding:35px;margin:65px 0 20px}
+.quick-promo-icon{display:grid;place-items:center;width:69px;height:69px;border:1px solid #dce7c7;background:#e8f1d8;color:#6c8937;border-radius:20px;flex-shrink:0}
+.quick-promo>div{flex:1}
+.quick-promo .eyebrow{color:#9aa97b;font-size:8px}
+.quick-promo h2{font-size:24px;letter-spacing:-.8px;color:#465b34;margin:11px 0}
+.quick-promo p{font-size:11px;color:#93a27e;margin:0;line-height:1.8}
+.quick-promo .button{background:#486936;border-color:#486936;font-size:11px;flex-shrink:0}
+.quick-page{padding-top:24px;padding-bottom:60px}
+.quick-hero{display:grid;grid-template-columns:1.25fr 1fr;align-items:center;background:linear-gradient(115deg,#f4f8e9,#eef5df);border:1px solid #e5ecd8;border-radius:27px;overflow:hidden;position:relative;padding:40px 45px;margin:25px 0 30px;gap:30px}
+.quick-brand{display:flex;align-items:center;gap:7px;color:#3f6533;font-size:25px;font-weight:800;letter-spacing:-1.3px}
+.quick-brand>span{display:grid;place-items:center;width:27px;height:32px;background:#dcecab;border-radius:8px;transform:rotate(-8deg)}
+.quick-brand small{font-size:8px;letter-spacing:.1px;font-weight:400;color:#9aa981;margin-left:4px}
+.quick-hero-kicker{font-size:7px;letter-spacing:1.6px;font-weight:600;color:#8fa076;display:block;margin-top:30px}
+.quick-hero h1{font-size:clamp(36px,4.3vw,61px);line-height:1.1;letter-spacing:-2.7px;color:#344e32;margin:16px 0 22px}
+.quick-hero h1>span{color:#7e9568}
+.quick-hero h1 em{font-style:normal;position:relative;z-index:1}
+.quick-hero h1 em:after{content:"";position:absolute;bottom:0;left:-3px;right:-8px;height:11px;border-radius:50%;background:#d8e991;z-index:-1;transform:rotate(-2deg)}
+.quick-hero-copy>p{font-size:12px;color:#93a282;max-width:380px;line-height:1.9;margin-bottom:23px}
+.quick-pin-form{max-width:450px}
+.quick-pin-form>label{display:flex;gap:6px;align-items:center;color:#789262;font-size:10px;margin-bottom:10px}
+.quick-pin-form>div{display:flex;gap:7px;padding:6px;background:white;border:1px solid #dce6cb;border-radius:11px;box-shadow:0 5px 15px #54763c04}
+.quick-pin-form input{border:0;background:transparent;outline:0;flex:1;min-width:0;font-size:11px;padding:10px;color:#4a693b;letter-spacing:.4px}
+.quick-pin-form>div:focus-within{outline:2px solid #90ad5f50}
+.quick-pin-form button{display:flex;align-items:center;gap:15px;padding:11px 17px;border:0;background:#456a31;color:white;border-radius:7px;font-size:10px;font-weight:600;white-space:nowrap;cursor:pointer}
+.quick-estimate-note{display:block;max-width:450px;font-size:8px;line-height:1.8;color:#a7b292;margin:15px 0 0}
+.quick-service-result{display:flex;gap:10px;align-items:flex-start;background:#ffffff70;border:1px solid #dee7d0;padding:13px;border-radius:10px;margin-top:15px;max-width:450px;color:#91a07c}
+.quick-service-result svg{flex-shrink:0;margin-top:2px}
+.quick-service-result strong{font-size:10px;display:block;font-weight:600}
+.quick-service-result small{display:block;font-size:9px;line-height:1.7;margin-top:6px}
+.quick-service-result.available{color:#527638;background:#e6f1d5;border-color:#d5e3be}
+.quick-hero-art{position:relative;min-height:400px;display:grid;place-items:center}
+.quick-orbit{position:absolute;width:360px;height:360px;max-width:110%;border:1px solid #dce6c9;border-radius:50%;box-shadow:0 0 0 35px #e5edd743,0 0 0 70px #e5edd72c}
+.quick-time-disc{position:absolute;z-index:2;right:5px;top:10px;background:#fff;border:1px solid #e5ecd8;border-radius:50%;width:140px;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(8deg);box-shadow:0 10px 30px #587b4310;color:#6a8a46}
+.quick-time-disc>svg{position:absolute;left:17px;top:15px;opacity:.4;width:19px}
+.quick-time-disc strong{font-size:65px;letter-spacing:-4px;line-height:1;margin-left:-4px}
+.quick-time-disc span{font-size:8px;letter-spacing:3px;margin-top:9px;color:#9bae7e}
+.quick-bag{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(120deg,#50793a,#365c2c);width:215px;height:255px;border:1px solid #456c32;border-radius:13px 13px 27px 27px;transform:rotate(-12deg);box-shadow:18px 25px 0 #5d7f3920,0 30px 50px #3e602e15;margin-top:42px}
+.quick-bag-handle{position:absolute;top:-40px;width:80px;height:60px;border:9px solid #3e642e;border-bottom:0;border-radius:45px 45px 0 0;z-index:-1}
+.quick-bag>svg{color:#b9d997;opacity:.3;position:absolute;top:29px;right:13px;width:56px;height:56px;transform:rotate(18deg)}
+.quick-bag>strong{color:#e4f1cb;font-size:28px;letter-spacing:-1px;line-height:1.15;margin-top:20px;transform:rotate(1deg)}
+.quick-bag>span{font-size:16px;letter-spacing:-.8px;color:#90b976;display:flex;align-items:center;gap:5px;margin-top:30px;font-weight:700}
+.quick-float-pill{display:flex;gap:8px;align-items:center;position:absolute;background:white;box-shadow:0 8px 25px #607b3710;border:1px solid #e1e9d4;border-radius:10px;color:#8b9e72;padding:14px 18px;font-size:9px;z-index:2}
+.quick-float-pill.pill-one{bottom:25px;left:-4px;transform:rotate(6deg)}
+.quick-float-pill.pill-two{right:-9px;bottom:105px;transform:rotate(-8deg)}
+.quick-star{color:#9ab66a;position:absolute;top:65px;left:4px;font-size:48px}
+.quick-how{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px;margin:28px 0 65px}
+.quick-how article{display:flex;align-items:center;gap:13px;border:1px solid #e7ecdf;border-radius:14px;padding:23px 19px}
+.quick-how article>span{font-size:10px;font-weight:700;color:#8c9f70;display:grid;place-items:center;border:1px solid #e1e9d6;background:#f5f8ef;width:32px;height:32px;border-radius:9px;flex-shrink:0}
+.quick-how article>div{flex:1}
+.quick-how h3{font-size:12px;color:#6c8255;margin:0 0 8px}
+.quick-how p{font-size:9px;color:#a2af92;margin:0;line-height:1.7}
+.quick-how article>svg{color:#b8c7a4;flex-shrink:0}
+.quick-catalog .eyebrow{display:flex;align-items:center;gap:5px;color:#91a476}
+.quick-catalog h2{font-size:33px;letter-spacing:-1.2px}
+.quick-catalog h2 em{color:#76994e;font-style:normal}
+.quick-catalog .section-heading{gap:20px}
+.quick-launch-note{padding:15px 20px;background:#f4f8ed;border:1px solid #e6ecd9;border-radius:10px;color:#98a888;font-size:11px;line-height:1.8}
+.quick-bottom{display:flex;align-items:center;gap:22px;margin-top:50px;padding:32px;border:1px solid #e3ebd6;border-radius:18px;background:#f7faef}
+.quick-bottom>svg{color:#91a877;flex-shrink:0}
+.quick-bottom>div{flex:1}
+.quick-bottom h2{font-size:20px;color:#6a8455;letter-spacing:-.5px;margin:0 0 10px}
+.quick-bottom p{font-size:11px;color:#a5b394;line-height:1.8;margin:0}
+.quick-bottom>.button{background:#53793c;border-color:#53793c;font-size:11px;flex-shrink:0}
+.signature-quick-link{color:#78964b!important}
+.signature-quick-link.is-current{background:#f2f8e7!important;border-color:#e0ebce!important}
+
+@media(min-width:901px) and (max-width:1350px){.signature-navigation{gap:2px}
+.signature-nav-link{padding:10px 9px;font-size:10px}
+.signature-actions{gap:5px}
+.signature-account>span{display:none}
+.signature-brand .brand-lockup small{display:none}
+.signature-logout{display:none!important}
+}
+
+@media(max-width:1100px){.wallet-layout{grid-template-columns:1.2fr 1fr;gap:20px}
+.wallet-topup{padding:23px}
+.wallet-balance-card{padding:28px}
+.wallet-benefits{gap:12px}
+.festival-hero{padding:35px}
+.festival-offer{width:220px;height:250px}
+.festival-offer>strong{font-size:78px}
+.festival-mini-card{top:25px;left:-15px}
+.sale-category-tile{height:170px;padding:20px 17px}
+.sale-category-tile>img{width:100px;height:100px}
+.sale-coupons>div:last-child{grid-template-columns:repeat(2,minmax(0,1fr))}
+.quick-hero{padding:35px 30px;gap:15px}
+.quick-time-disc{width:115px;height:115px;right:-10px}
+.quick-time-disc strong{font-size:52px}
+.quick-bag{width:185px;height:230px}
+.quick-bag>strong{font-size:24px}
+.quick-float-pill{padding:12px;font-size:8px}
+.quick-float-pill.pill-two{right:-15px}
+.quick-how article{padding:18px 14px;gap:9px}
+.quick-how article>svg{display:none}
+.marketplace-strip>a{padding:14px;gap:9px}
+.marketplace-strip strong{font-size:10px}
+}
+
+@media(max-width:700px){.wallet-page,.deals-page,.quick-page{padding-top:15px}
+.wallet-heading{margin:25px 0}
+.wallet-heading h1{font-size:34px;letter-spacing:-1.5px}
+.wallet-heading>p{font-size:12px}
+.wallet-heading-icon{display:none}
+.wallet-layout{grid-template-columns:1fr}
+.wallet-topup{padding:25px;margin-top:4px}
+.wallet-balance-card{padding:27px;border-radius:20px}
+.wallet-balance-card>strong{font-size:43px}
+.wallet-benefits{gap:15px;padding:25px 0}
+.wallet-benefits strong{font-size:10px}
+.wallet-benefits p{font-size:9px}
+.wallet-benefits svg{width:17px}
+.wallet-discover{padding:18px}
+.wallet-discover strong{font-size:12px}
+.wallet-history{padding:21px}
+.wallet-history .commerce-panel-heading{align-items:flex-start}
+.wallet-history .commerce-panel-heading>.button{font-size:9px;padding:10px}
+.wallet-history h2{font-size:18px}
+.wallet-transactions article{gap:11px}
+.wallet-activity-icon{width:32px;height:32px;border-radius:9px}
+.wallet-transactions strong{font-size:10px}
+.wallet-transactions small{font-size:8px}
+.wallet-transactions article>span:last-child{max-width:110px}
+.marketplace-strip{grid-template-columns:1fr;gap:8px;padding:15px 0}
+.marketplace-strip>a{padding:14px 16px;border-radius:11px}
+.marketplace-strip>a>span{width:34px;height:34px}
+.marketplace-strip strong{font-size:12px}
+.marketplace-strip small{font-size:7px}
+.festival-hero{grid-template-columns:1fr;padding:28px 24px 15px;border-radius:20px;gap:10px;margin-top:20px}
+.festival-copy h1{font-size:38px;letter-spacing:-1.8px}
+.festival-copy>p{font-size:11px}
+.festival-kicker{font-size:7px;letter-spacing:1.3px}
+.festival-badges{gap:12px;font-size:8px}
+.festival-button{padding:13px 18px;font-size:10px}
+.festival-art{min-height:285px;margin-top:20px}
+.festival-offer{width:205px;height:230px}
+.festival-offer>strong{font-size:75px}
+.festival-offer>b{font-size:18px}
+.festival-offer>small{font-size:6px}
+.festival-mini-card{left:0;top:12px;padding:11px;font-size:8px}
+.festival-ticket{bottom:10px;right:0;padding:11px 14px;font-size:8px}
+.sale-spark.spark-one{right:0;top:0;font-size:40px}
+.sale-spark.spark-two{left:5px;font-size:35px}
+.festival-perks{display:grid;grid-template-columns:1fr;gap:15px;padding:20px;margin:0 8px 35px;align-items:start}
+.festival-perks strong{font-size:10px}
+.festival-perks svg{width:17px}
+.festival-perks>span,.festival-perks>a{justify-content:flex-start}
+.sale-category-section,.sale-coupons{margin:35px 0}
+.sale-category-section h2,.sale-coupons h2{font-size:24px}
+.sale-category-section .section-heading{align-items:flex-start;gap:18px}
+.sale-category-section .subtle-link{font-size:10px}
+.sale-category-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.sale-category-tile{height:162px;padding:20px 15px}
+.sale-category-tile>span{font-size:12px}
+.sale-category-tile small{font-size:9px}
+.sale-category-tile>img{width:94px;height:94px}
+.sale-category-tile>svg{left:15px;bottom:19px;width:16px}
+.sale-coupons>div:last-child{grid-template-columns:1fr;gap:12px}
+.sale-coupons .section-heading{gap:10px;align-items:flex-start}
+.sale-coupons .section-heading>span{font-size:9px;white-space:nowrap}
+.sale-coupons article{padding:17px}
+.deal-spotlight{grid-template-columns:1fr;padding:43px 25px 25px;border-radius:17px;gap:25px;margin:35px 0}
+.spotlight-tag{left:25px;top:20px;font-size:7px}
+.spotlight-copy h2{font-size:30px}
+.spotlight-copy>div>strong{font-size:26px}
+.spotlight-copy>div{gap:10px;flex-wrap:wrap}
+.spotlight-image{width:235px;height:235px;margin:5px 0 15px}
+.spotlight-sticker{right:15px;bottom:20px;width:70px;height:70px;font-size:9px}
+.spotlight-sticker b{font-size:16px}
+.sale-product-section{padding-top:20px}
+.sale-product-section .section-heading{align-items:flex-start;flex-direction:column;gap:20px}
+.sale-product-section h2{font-size:28px}
+.sale-sort{align-self:flex-end}
+.sale-filter-bar{flex-direction:column;gap:13px;padding:11px}
+.sale-filter-bar>div{flex-wrap:nowrap;overflow:auto}
+.sale-filter-bar button{white-space:nowrap;font-size:9px;padding:9px 11px}
+.sale-filter-bar>label{justify-content:flex-end}
+.quick-promo{padding:25px 22px;flex-wrap:wrap;gap:17px;margin:40px 0 15px}
+.quick-promo-icon{width:50px;height:50px;border-radius:15px}
+.quick-promo-icon svg{width:28px}
+.quick-promo>div{flex-basis:calc(100% - 80px)}
+.quick-promo h2{font-size:20px;line-height:1.2}
+.quick-promo p{font-size:10px}
+.quick-promo .eyebrow{font-size:7px}
+.quick-promo .button{width:100%;justify-content:center;margin-top:4px}
+.quick-hero{grid-template-columns:1fr;padding:28px 24px 20px;border-radius:20px;margin-top:20px;gap:10px}
+.quick-brand{font-size:24px}
+.quick-hero-kicker{margin-top:28px;font-size:6px;letter-spacing:1.3px}
+.quick-hero h1{font-size:44px;letter-spacing:-2px}
+.quick-hero-copy>p{font-size:11px}
+.quick-pin-form>label{font-size:9px;gap:5px}
+.quick-pin-form input{font-size:10px;padding:10px 7px;letter-spacing:0}
+.quick-pin-form button{font-size:9px;padding:11px;gap:8px}
+.quick-estimate-note{font-size:7px}
+.quick-hero-art{min-height:335px;margin-top:15px}
+.quick-orbit{width:280px;height:280px;max-width:none}
+.quick-bag{width:190px;height:235px;margin-top:40px}
+.quick-time-disc{width:115px;height:115px;top:5px;right:0}
+.quick-float-pill.pill-one{left:-5px;bottom:13px}
+.quick-float-pill.pill-two{right:-5px;bottom:75px}
+.quick-star{left:0;top:36px;font-size:38px}
+.quick-how{grid-template-columns:1fr;margin:24px 0 40px;gap:10px}
+.quick-how article{padding:19px;gap:13px}
+.quick-how article>svg{display:block;width:20px}
+.quick-how h3{font-size:12px}
+.quick-how p{font-size:10px}
+.quick-catalog .section-heading{flex-direction:column;align-items:flex-start;gap:20px}
+.quick-catalog h2{font-size:29px}
+.quick-catalog .button{font-size:11px}
+.quick-bottom{padding:24px;flex-wrap:wrap;gap:15px;margin-top:30px}
+.quick-bottom>div{flex-basis:calc(100% - 60px)}
+.quick-bottom h2{font-size:19px;line-height:1.4}
+.quick-bottom p{font-size:10px}
+.quick-bottom>.button{width:100%;justify-content:center}
+.quick-launch-note{font-size:10px}
+.wallet-shortcut{display:none!important}
+}
+
+@media(prefers-reduced-motion:reduce){.marketplace-strip>a,.sale-category-tile,.festival-button{transition:none}
+}
+

@@ -1,3 +1,4 @@
+import { toRupees } from "./currency.js";
 export const categories = [
   { name: "Home & Living", slug: "home-living", image: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=900&q=85", tone: "sand" },
   { name: "Tech & Audio", slug: "tech-audio", image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=85", tone: "blue" },
@@ -36,4 +37,9 @@ for (const [slug, finds] of Object.entries(extraFinds)) {
       badge: onSale ? "SALE" : "NEW ARRIVAL", featured: index < 2, isDemo: true,
     });
   });
+}
+
+for (const product of demoProducts) {
+  product.price = toRupees(product.price);
+  product.compareAtPrice = toRupees(product.compareAtPrice);
 }

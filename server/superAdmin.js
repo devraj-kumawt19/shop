@@ -69,6 +69,8 @@ superAdminRouter.get("/settings", route(async (req, res) => res.json({ settings:
 superAdminRouter.patch("/settings", route(async (req, res) => {
   const error = validateSettings(req.body);
   if (error) return res.status(400).json({ message: error });
+  const mergedError = validateSettings({ ...(await getStoreSettings()), ...req.body });
+  if (mergedError) return res.status(400).json({ message: mergedError });
   const updates = Object.fromEntries(Object.entries(req.body).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
   await StoreSettings.findByIdAndUpdate("store", { $set: updates }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true });
   return res.json({ settings: await getStoreSettings() });

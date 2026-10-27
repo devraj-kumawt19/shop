@@ -8,19 +8,13 @@ import { matchesCapturedPayment, minorUnits, validSignature } from "./paymentPol
 import { paymentWindowOpen } from "./commercePolicy.js";
 import { notifyProductChange } from "./customerEvents.js";
 
-export const paymentsConfigured = () => Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET && process.env.RAZORPAY_WEBHOOK_SECRET);
+export { paymentsConfigured } from "./gateway.js";
+import { paymentsConfigured, gateway } from "./gateway.js";
+import { WalletTopup } from "./models.js";
+import { finalizeTopup } from "./wallet.js";
+import { deliveryQuote } from "./quickPolicy.js";
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res)).catch(next);
-
-async function gateway(path, body) {
-  const response = await fetch(`https://api.razorpay.com/v1/${path}`, {
-    method: body ? "POST" : "GET", signal: AbortSignal.timeout(15000),
-    headers: { Authorization: `Basic ${Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString("base64")}`, "Content-Type": "application/json" },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  if (!response.ok) throw fail("The payment service could not complete the request. Please try again.", 502);
-  return response.json();
-}
 
 export async function finalizePayment(payment) {
   const session = await mongoose.startSession();
@@ -34,7 +28,9 @@ export async function finalizePayment(payment) {
         return;
       }
       const products = await Product.find({ _id: { $in: order.items.map((item) => item.product) } }).session(session).lean();
-      const enoughStock = order.status === "awaiting_payment" && paymentWindowOpen(order) && order.items.every((item) => products.some((product) => String(product._id) === String(item.product) && (item.variantSku ? product.variants?.find((variant) => variant.sku === item.variantSku)?.stock ?? 0 : product.stock) >= item.quantity));
+      let deliveryAvailable = true;
+      if (order.deliveryMethod === "express15") { try { deliveryQuote("express15", order.shippingAddress.postalCode, products, await getStoreSettings()); } catch { deliveryAvailable = false; } }
+      const enoughStock = deliveryAvailable && order.status === "awaiting_payment" && paymentWindowOpen(order) && order.items.every((item) => products.some((product) => String(product._id) === String(item.product) && (item.variantSku ? product.variants?.find((variant) => variant.sku === item.variantSku)?.stock ?? 0 : product.stock) >= item.quantity));
       if (enoughStock) {
         for (const item of order.items) {
           await changeStock(item, -item.quantity, { session, reason: "Online payment captured", reference: order.id });
@@ -45,6 +41,7 @@ export async function finalizePayment(payment) {
         order.inventoryCommitted = true;
         order.paymentStatus = "paid";
         order.status = "placed";
+        if (order.deliveryMethod === "express15") order.estimatedDeliveryAt = new Date(Date.now() + 15 * 60000);
         await markCartConverted(order.user, session);
       } else {
         order.paymentStatus = "refund_required";
@@ -70,6 +67,7 @@ export async function razorpayWebhook(req, res, next) {
       if (!payment || !/^pay_[a-zA-Z0-9]+$/.test(payment.id || "") || !payment.order_id) return res.status(400).json({ message: "Invalid payment event." });
       // Unknown provider orders may belong to another application on this merchant account.
       if (await Order.exists({ gatewayOrderId: payment.order_id })) await finalizePayment(await gateway(`payments/${payment.id}`));
+      else if (await WalletTopup.exists({ gatewayOrderId: payment.order_id })) await finalizeTopup(await gateway(`payments/${payment.id}`));
     }
     return res.json({ received: true });
   } catch (error) { return next(error); }

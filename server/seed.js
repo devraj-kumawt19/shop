@@ -1,6 +1,6 @@
 import "dotenv/config";
 import mongoose from "mongoose";
-import { Category, Product } from "./models.js";
+import { Category, Product, StoreSettings } from "./models.js";
 import { categories, demoProducts } from "./demoCatalog.js";
 
 const catalog = categories;
@@ -13,6 +13,8 @@ if (!process.env.MONGO_URI) {
 
 try {
   await mongoose.connect(process.env.MONGO_URI);
+  const settings = await StoreSettings.findById("store").lean();
+  if (settings?.currency === "USD") throw new Error("The sample catalog is now priced in INR. Convert the existing USD catalog with npm run convert-to-inr before adding samples.");
   for (const category of catalog) {
     await Category.updateOne({ slug: category.slug }, { $setOnInsert: category }, { upsert: true });
   }

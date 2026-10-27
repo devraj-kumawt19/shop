@@ -112,8 +112,8 @@ test("settings and role policies protect sensitive fields and shipping boundarie
   assert.equal(validateSettings(defaultStoreSettings), "");
   assert.notEqual(validateSettings(JSON.parse('{"__proto__":{"polluted":true}}')), "");
   assert.notEqual(validateUserUpdate(users[ids.owner], users[ids.owner], { role: "admin" }), "");
-  assert.equal(shippingFor(74.99), 6.95);
-  assert.equal(shippingFor(75), 0);
+  assert.equal(shippingFor(7138.49), 661.50);
+  assert.equal(shippingFor(7138.50), 0);
   assert.equal(shippingFor(95, { freeShippingThreshold: 100, shippingFee: 9.5 }), 9.5);
   assert.equal(User.schema.path("password").options.select, false);
   assert.equal(User.schema.path("isActive").defaultValue, true);

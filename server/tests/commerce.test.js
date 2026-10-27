@@ -73,7 +73,7 @@ beforeEach(() => {
   process.env.RESEND_API_KEY = "test-only-email-key";
   process.env.RESEND_FROM = "Store <store@example.test>";
   stock = 10; jobs = []; calls = []; allocationCount = 0; failEmail = false;
-  settings = { ...defaultStoreSettings, onlinePaymentsEnabled: true };
+  settings = { ...defaultStoreSettings, currency: "USD", shippingFee: 6.95, freeShippingThreshold: 75, onlinePaymentsEnabled: true };
   order = { id: orderId, _id: orderId, user: userId, orderNumber: "SS-TEST", total: 51.95, subtotal: 45, shipping: 6.95, currency: "USD", gatewayOrderId: "order_test123", paymentMethod: "razorpay", paymentStatus: "pending", status: "awaiting_payment", inventoryCommitted: false, emailStatus: {}, items: [{ product: productId, name: "Test & <find>", price: 15, quantity: 3 }], shippingAddress: { firstName: "Test", lastName: "Customer", email: "customer@example.test", street: "Sample Street", city: "Test City", state: "Test State", postalCode: "12345" }, save: async () => {} };
   providerPayment = { id: "pay_test123", order_id: order.gatewayOrderId, status: "captured", currency: "USD", amount: 5195 };
 });

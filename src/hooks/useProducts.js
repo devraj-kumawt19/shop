@@ -32,6 +32,7 @@ export function useProducts(params = {}) {
               return (!category || product.categorySlug === category)
                 && (params.sale !== "true" || product.compareAtPrice > product.price)
                 && (params.featured !== "true" || product.featured)
+                && (params.quick !== "true" || product.quickEligible === true)
                 && (!search || `${product.name} ${product.category} ${product.description}`.toLowerCase().includes(search));
             });
             filtered.sort((a, b) => {

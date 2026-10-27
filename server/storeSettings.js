@@ -1,7 +1,7 @@
 export const defaultStoreSettings = {
   siteName: "ShopSphere",
   tagline: "A little discovery. A lot to love.",
-  announcement: "Free shipping on orders over $75",
+  announcement: "Thoughtful finds. Now priced in rupees.",
   heroHeading: "Good things.\nGreat days.",
   heroAccent: "All yours.",
   heroDescription: "A little upgrade goes a long way. Discover beautifully considered finds for your home, your routine, and everything in between.",
@@ -9,22 +9,29 @@ export const defaultStoreSettings = {
   supportEmail: "hello@shopsphere.example",
   footerDescription: "Considered pieces for everyday living. Found with care. Ready for real life.",
   primaryColor: "#2563eb",
-  freeShippingThreshold: 75,
-  shippingFee: 6.95,
+  freeShippingThreshold: 7138.50,
+  shippingFee: 661.50,
   checkoutEnabled: true,
-  currency: "USD",
+  currency: "INR",
   onlinePaymentsEnabled: false,
   saleEnabled: true,
   saleTitle: "Good finds. Even better prices.",
   saleDescription: "The pieces you love, with a little extra to love about the price.",
   lowStockThreshold: 5,
   aiAssistantEnabled: false,
+  walletEnabled: true,
+  quickDeliveryEnabled: false,
+  quickPincodes: "",
+  quickDeliveryFee: 29,
+  quickOpenHour: 8,
+  quickCloseHour: 23,
+  saleEndsAt: "",
 };
 
 export function shippingFor(subtotal, settings = defaultStoreSettings) {
   return subtotal >= settings.freeShippingThreshold ? 0 : settings.shippingFee;
 }
 
-export function formatMoney(amount, currency = "USD") {
+export function formatMoney(amount, currency = "INR") {
   return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", { style: "currency", currency }).format(Number(amount || 0));
 }

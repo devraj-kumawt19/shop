@@ -57,6 +57,11 @@ export function createCommerceRouter(authenticate) {
   const router = Router();
   const secure = [requireDatabase, authenticate];
   const staff = (permissions) => [...secure, permit(...permissions), auditAdminChanges];
+  router.get("/offers", requireDatabase, route(async (req, res) => {
+    const now = new Date(), settings = await getStoreSettings();
+    const offers = await Coupon.find({ active: true, currency: settings.currency, $and: [{ $or: [{ startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] }, { $or: [{ maxUses: 0 }, { $expr: { $lt: ["$uses", "$maxUses"] } }] }] }).sort({ createdAt: -1 }).limit(6).select("code type amount currency minimum maximumDiscount expiresAt").lean();
+    res.json({ offers });
+  }));
   router.get("/products/:id/reviews", requireDatabase, route(async (req, res) => {
     const product = id(req.params.id);
     const [reviews, stats] = await Promise.all([

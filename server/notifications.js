@@ -6,7 +6,7 @@ const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&"
 export function buildOrderEmail(order, settings, kind) {
   const refundRequired = order.paymentStatus === "refund_required";
   const headline = refundRequired ? "Your payment needs attention" : kind === "owner" ? "A new order just arrived" : "Your order is confirmed";
-  const payment = order.paymentMethod === "razorpay" ? (refundRequired ? "Payment received; refund review required" : "Paid online") : "Cash on delivery — pay when your order arrives";
+  const payment = order.paymentMethod === "wallet" ? `Shop Wallet — ${order.paymentStatus}` : order.paymentMethod === "razorpay" ? (refundRequired ? "Payment received; refund review required" : "Paid online") : "Cash on delivery — pay when your order arrives";
   const lines = order.items.map((item) => `${item.name} × ${item.quantity} — ${formatMoney(item.price * item.quantity, order.currency)}`);
   const text = `${settings.siteName}\n${headline}\nOrder: ${order.orderNumber}\n${lines.join("\n")}\nDiscount: ${formatMoney(order.discount, order.currency)}${order.couponCode ? ` (${order.couponCode})` : ""}\nShipping: ${formatMoney(order.shipping, order.currency)}\nTotal: ${formatMoney(order.total, order.currency)}\n${payment}\nDeliver to: ${order.shippingAddress.firstName} ${order.shippingAddress.lastName}, ${order.shippingAddress.street}, ${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.postalCode}\n${refundRequired ? "We could not allocate stock for this payment. Contact the store for a refund; this order will not be fulfilled.\n" : ""}Questions? ${settings.supportEmail}`;
   return {

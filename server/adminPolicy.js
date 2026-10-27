@@ -28,6 +28,12 @@ export function validateSettings(input) {
   if ("checkoutEnabled" in input && typeof input.checkoutEnabled !== "boolean") return "Checkout status must be true or false.";
   for (const key of ["onlinePaymentsEnabled", "saleEnabled"]) if (key in input && typeof input[key] !== "boolean") return "Toggle settings must be true or false.";
   if ("aiAssistantEnabled" in input && typeof input.aiAssistantEnabled !== "boolean") return "AI assistant status must be true or false.";
+  for (const key of ["walletEnabled", "quickDeliveryEnabled"]) if (key in input && typeof input[key] !== "boolean") return "Commerce switches must be true or false.";
+  if ("quickPincodes" in input && (typeof input.quickPincodes !== "string" || input.quickPincodes.length > 7000 || input.quickPincodes.split(/[\s,]+/).filter(Boolean).some((pin) => !/^\d{6}$/.test(pin)))) return "Enter 6-digit PIN codes separated by commas or spaces.";
+  if ("quickDeliveryFee" in input && (!Number.isFinite(input.quickDeliveryFee) || input.quickDeliveryFee < 0 || input.quickDeliveryFee > 1000 || Math.round(input.quickDeliveryFee * 100) !== input.quickDeliveryFee * 100)) return "Enter a valid express-delivery fee.";
+  for (const key of ["quickOpenHour", "quickCloseHour"]) if (key in input && (!Number.isInteger(input[key]) || input[key] < 0 || input[key] > (key === "quickCloseHour" ? 24 : 23))) return "Enter delivery opening/closing hours using 0–24.";
+  if ("quickOpenHour" in input && "quickCloseHour" in input && input.quickOpenHour >= input.quickCloseHour) return "Express closing time must be after opening time.";
+  if ("saleEndsAt" in input && (typeof input.saleEndsAt !== "string" || input.saleEndsAt && Number.isNaN(Date.parse(input.saleEndsAt)))) return "Enter a valid sale end date or leave it empty.";
   if ("lowStockThreshold" in input && (!Number.isInteger(input.lowStockThreshold) || input.lowStockThreshold < 0 || input.lowStockThreshold > 1000)) return "Low-stock threshold must be a whole number between 0 and 1000.";
   if ("currency" in input && !["USD", "INR"].includes(input.currency)) return "Choose USD or INR for the catalog currency.";
   if (input.supportEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.supportEmail)) return "Enter a valid support email.";

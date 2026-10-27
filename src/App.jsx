@@ -1,5 +1,8 @@
 import { NotificationsPage, ShoppingAssistant } from "./CommerceWidgets.jsx";
 import AdvancedAdmin from "./AdvancedAdmin.jsx";
+import WalletPage from "./WalletPage.jsx";
+import DealsPage from "./DealsPage.jsx";
+import QuickDeliveryPage from "./QuickDeliveryPage.jsx";
 import { useEffect, useRef } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ShopProvider, useShop } from "./ShopContext.jsx";
@@ -69,6 +72,9 @@ function AppRoutes() {
         <Route path="/categories/:category" element={<ProductsPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/wishlist" element={<WishlistPage />} />
+        <Route path="/wallet" element={<WalletPage />} />
+        <Route path="/sale" element={<DealsPage />} />
+        <Route path="/quick-delivery" element={<QuickDeliveryPage />} />
         <Route path="/login" element={<AuthPage mode="login" />} />
         <Route path="/register" element={<AuthPage mode="register" />} />
         <Route path="/checkout" element={<CheckoutPage />} />

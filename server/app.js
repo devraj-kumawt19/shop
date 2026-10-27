@@ -1,4 +1,6 @@
 import express from "express";
+import { createWalletRouter, changeWallet, refundWalletOrder, validRequestKey, ensureWallet } from "./wallet.js";
+import { quickService, deliveryQuote } from "./quickPolicy.js";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -111,7 +113,9 @@ app.get("/api/internal/notifications", (req, res, next) => {
 }));
 app.get("/api/settings", requireDatabase, asyncRoute(async (req, res) => res.json({ settings: await getStoreSettings() })));
 app.use("/api/payments", requireDatabase, createPaymentsRouter(authenticate));
+app.use("/api", createWalletRouter(authenticate));
 app.use("/api", createCommerceRouter(authenticate));
+app.get("/api/delivery/check", requireDatabase, asyncRoute(async (req, res) => res.json(quickService(await getStoreSettings(), req.query.postalCode))));
 app.use(seoRouter);
 
 app.post("/api/auth/register", requireDatabase, asyncRoute(async (req, res) => {
@@ -152,10 +156,11 @@ app.get("/api/categories", requireDatabase, asyncRoute(async (req, res) => {
 }));
 
 app.get("/api/products", requireDatabase, asyncRoute(async (req, res) => {
-  const { category, search, featured, sort, sale } = req.query;
+  const { category, search, featured, sort, sale, quick } = req.query;
   const filter = {};
   if (typeof category === "string" && category) filter.categorySlug = category.toLowerCase();
   if (featured === "true") filter.featured = true;
+  if (quick === "true") filter.quickEligible = true;
   if (sale === "true") filter.$expr = { $gt: ["$compareAtPrice", "$price"] };
   if (typeof search === "string" && search.trim()) filter.$text = { $search: search.trim().slice(0, 100) };
   const sortBy = sort === "price-low" ? { price: 1 } : sort === "price-high" ? { price: -1 } : sort === "rating" ? { rating: -1 } : { featured: -1, createdAt: -1 };
@@ -182,36 +187,54 @@ app.post("/api/orders", requireDatabase, authenticate, asyncRoute(async (req, re
   const addressError = validateAddress(shippingAddress);
   if (addressError) return res.status(400).json({ message: addressError });
   if (!Array.isArray(items) || items.length < 1 || items.length > 50) return res.status(400).json({ message: "Your order must contain between 1 and 50 products." });
-  if (!["cash_on_delivery", "razorpay"].includes(paymentMethod)) return res.status(400).json({ message: "Choose an available payment method." });
+  if (!["cash_on_delivery", "razorpay", "wallet"].includes(paymentMethod)) return res.status(400).json({ message: "Choose an available payment method." });
   if (paymentMethod === "razorpay" && (!storeSettings.onlinePaymentsEnabled || !paymentsConfigured())) return res.status(503).json({ message: "Online payment is not configured. Choose cash on delivery." });
+  const checkoutKey = req.body.checkoutKey;
+  if (checkoutKey !== undefined && !validRequestKey(checkoutKey) || paymentMethod === "wallet" && !validRequestKey(checkoutKey)) return res.status(400).json({ message: "A valid checkout request key is required." });
+  if (checkoutKey) { await Order.init(); const existing = await Order.findOne({ user: req.user.id, checkoutKey }); if (existing) return res.status(200).json({ order: existing }); }
+  if (paymentMethod === "wallet" && (!storeSettings.walletEnabled || storeSettings.currency !== "INR")) return res.status(503).json({ message: "Wallet payments are available for INR orders when the wallet is enabled." });
+  if (paymentMethod === "wallet") await ensureWallet(req.user.id);
   const session = await mongoose.startSession();
   let order;
   try {
     await session.withTransaction(async () => {
       const { products, orderItems, subtotal } = await priceCart(items, session);
+      const currentSettings = await getStoreSettings();
+      if (currentSettings.currency !== storeSettings.currency || req.body.expectedCurrency && req.body.expectedCurrency !== storeSettings.currency || req.body.expectedSubtotal !== undefined && Math.abs(req.body.expectedSubtotal - subtotal) > .005) throw Object.assign(new Error("Catalog prices or currency changed. Refresh your bag before placing this order."), { status: 409 });
       if (paymentMethod === "razorpay" && process.env.RAZORPAY_KEY_ID?.startsWith("rzp_live_") && products.some((product) => product.isDemo)) throw Object.assign(new Error("Sample products can use test payments only."), { status: 400 });
       const { coupon, discount } = await quoteCoupon(req.body.couponCode, subtotal, storeSettings.currency, req.user.id, session);
-      const shipping = shippingFor(subtotal - discount, storeSettings);
+      const delivery = deliveryQuote(req.body.deliveryMethod || "standard", shippingAddress.postalCode, products, storeSettings);
+      const shipping = delivery.fee ?? shippingFor(subtotal - discount, storeSettings);
+      const total = roundMoney(subtotal - discount + shipping);
       const orderId = new mongoose.Types.ObjectId();
       await reserveCoupon(coupon, req.user.id, orderId, session);
-      if (paymentMethod === "cash_on_delivery") for (const item of orderItems) {
-        await changeStock(item, -item.quantity, { session, actor: req.user.id, reason: "Cash on delivery order", reference: String(orderId) });
+      if (paymentMethod === "wallet") {
+        if (products.some((p) => p.isDemo)) throw Object.assign(new Error("Wallet funds cannot be used for sample products."), { status: 400 });
+        if (total > 0) await changeWallet({ user: req.user.id, amountMinor: -Math.round(total * 100), key: `purchase/${orderId}`, kind: "purchase", description: "ShopSphere order", order: orderId }, session);
+      }
+      if (paymentMethod !== "razorpay") for (const item of orderItems) {
+        await changeStock(item, -item.quantity, { session, actor: req.user.id, reason: paymentMethod === "wallet" ? "Wallet order" : "Cash on delivery order", reference: String(orderId) });
         const product = products.find((p) => String(p._id) === String(item.product)); const before = { ...product }; product.stock -= item.quantity;
         await notifyProductChange(before, product, storeSettings, session);
       }
       [order] = await Order.create([{
-        _id: orderId,
+        _id: orderId, ...(checkoutKey ? { checkoutKey } : {}),
+        deliveryMethod: delivery.method,
+        ...(delivery.method === "express15" && paymentMethod !== "razorpay" ? { estimatedDeliveryAt: new Date(Date.now() + 15 * 60000) } : {}),
+        paymentStatus: paymentMethod === "wallet" ? "paid" : "pending",
+        ...(paymentMethod === "wallet" ? { paidAt: new Date() } : {}),
         orderNumber: `SS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-        user: req.user.id, items: orderItems, shippingAddress, subtotal, discount, couponCode: coupon?.code || "", coupon: coupon?._id, couponCommitted: Boolean(coupon), shipping, total: roundMoney(subtotal - discount + shipping), paymentMethod,
+        user: req.user.id, items: orderItems, shippingAddress, subtotal, discount, couponCode: coupon?.code || "", coupon: coupon?._id, couponCommitted: Boolean(coupon), shipping, total, paymentMethod,
         currency: storeSettings.currency,
         status: paymentMethod === "razorpay" ? "awaiting_payment" : "placed",
         inventoryCommitted: paymentMethod !== "razorpay",
         containsDemoProducts: products.some((product) => product.isDemo),
         timeline: [{ status: paymentMethod === "razorpay" ? "awaiting_payment" : "placed", message: paymentMethod === "razorpay" ? "Awaiting secure payment" : "Order placed" }],
       }], { session });
-      if (paymentMethod === "cash_on_delivery") { await markCartConverted(req.user.id, session); await enqueueOrderEmails(order, storeSettings, session); }
+      if (paymentMethod !== "razorpay") { await markCartConverted(req.user.id, session); await enqueueOrderEmails(order, storeSettings, session); }
     });
   } catch (error) {
+    if (error.code === 11000 && checkoutKey) { const existing = await Order.findOne({ user: req.user.id, checkoutKey }); if (existing) return res.status(200).json({ order: existing }); }
     if (error.status === 400 || error.status === 409) return res.status(error.status).json({ message: error.message });
     throw error;
   } finally {
@@ -251,14 +274,14 @@ app.post("/api/admin/products", asyncRoute(async (req, res) => {
   if (!can(req.user, "inventory") && (stock > 0 || variants.length)) return res.status(403).json({ message: "Inventory permission is required to set initial stock or product options." });
   const session = await mongoose.startSession(); let product;
   try { await session.withTransaction(async () => {
-  [product] = await Product.create([{ name: name.trim(), description, image, badge, category: category.trim(), categorySlug: slug, price: variants.length ? Math.min(...variants.map((v) => v.price)) : price, compareAtPrice: Number(compareAtPrice) || 0, stock: variants.length ? variants.reduce((sum, v) => sum + v.stock, 0) : stock, variants, featured: Boolean(req.body.featured), isDemo: Boolean(req.body.isDemo) }], { session });
+  [product] = await Product.create([{ name: name.trim(), description, image, badge, category: category.trim(), categorySlug: slug, price: variants.length ? Math.min(...variants.map((v) => v.price)) : price, compareAtPrice: Number(compareAtPrice) || 0, stock: variants.length ? variants.reduce((sum, v) => sum + v.stock, 0) : stock, variants, featured: Boolean(req.body.featured), isDemo: Boolean(req.body.isDemo), quickEligible: Boolean(req.body.quickEligible) }], { session });
   const initial = variants.length ? variants.filter((v) => v.stock > 0).map((v) => ({ product: product.id, variantSku: v.sku, delta: v.stock, reason: "Initial inventory", actor: req.user.id })) : stock > 0 ? [{ product: product.id, delta: stock, reason: "Initial inventory", actor: req.user.id }] : [];
   if (initial.length) await StockMovement.create(initial, { session, ordered: true });
   }); } finally { await session.endSession(); }
   return res.status(201).json({ product });
 }));
 app.patch("/api/admin/products/:id", asyncRoute(async (req, res) => {
-  const allowed = ["name", "category", "categorySlug", "description", "image", "price", "compareAtPrice", "stock", "badge", "featured", "isDemo", "variants"];
+  const allowed = ["name", "category", "categorySlug", "description", "image", "price", "compareAtPrice", "stock", "badge", "featured", "isDemo", "variants", "quickEligible"];
   const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowed.includes(key)));
   for (const key of ["price", "compareAtPrice", "stock"]) if (key in updates && (!Number.isFinite(updates[key]) || updates[key] < 0 || (key === "stock" ? !Number.isInteger(updates[key]) : roundMoney(updates[key]) !== updates[key]) || key === "price" && updates[key] === 0)) return res.status(400).json({ message: "Use a positive price, non-negative compare-at price and whole stock quantities." });
   if (updates.category && !updates.categorySlug) updates.categorySlug = updates.category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -401,8 +424,10 @@ app.patch("/api/admin/orders/:id", asyncRoute(async (req, res) => {
           await notifyProductChange(before, { ...before, stock: before.stock + item.quantity, updatedAt: new Date() }, await getStoreSettings(), session);
         }
         order.inventoryCommitted = false;
+        await refundWalletOrder(order, session);
         if (order.paymentMethod === "razorpay" && order.paymentStatus === "paid") order.paymentStatus = "refund_required";
       } else if (order.status === "cancelled" && nextStatus !== "cancelled") {
+        if (order.paymentMethod === "wallet") throw Object.assign(new Error("A refunded wallet order cannot be reopened. Place a new order."), { status: 409 });
         if (order.couponCode) throw Object.assign(new Error("Cancelled discounted orders cannot be reopened; place a new order."), { status: 409 });
         for (const item of order.items) await changeStock(item, -item.quantity, { session, actor: req.user.id, reason: "Order reopened", reference: order.id });
         order.inventoryCommitted = true;

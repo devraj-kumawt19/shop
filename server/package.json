@@ -11,7 +11,8 @@
     "seed": "node seed.js",
     "create-admin": "node createAdmin.js",
     "create-super-admin": "node createSuperAdmin.js",
-    "test": "node --test"
+    "test": "node --test",
+    "convert-to-inr": "node convertToInr.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

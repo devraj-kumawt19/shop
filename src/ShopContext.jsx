@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { getErrorMessage } from "./api.js";
 import { defaultStoreSettings, formatMoney } from "../server/storeSettings.js";
@@ -21,6 +21,7 @@ export function ShopProvider({ children }) {
   const [settings, setSettings] = useState(defaultStoreSettings);
   const [settingsError, setSettingsError] = useState("");
   const navigate = useNavigate();
+  const refreshedCurrency = useRef("");
 
   const refreshSettings = useCallback(async () => {
     try {
@@ -44,6 +45,24 @@ export function ShopProvider({ children }) {
   useEffect(() => { localStorage.setItem("shopsphere_cart", JSON.stringify(cart)); }, [cart]);
   useEffect(() => { localStorage.setItem("shopsphere_wishlist", JSON.stringify(wishlist)); }, [wishlist]);
   useEffect(() => { localStorage.setItem("shopsphere_user", JSON.stringify(user)); }, [user]);
+  useEffect(() => {
+    if (settingsError || refreshedCurrency.current === settings.currency) return;
+    const ids = [...new Set([...cart.map((item) => item.product._id), ...wishlist.map((p) => p._id)])].filter((id) => /^[a-f0-9]{24}$/i.test(id));
+    if (!ids.length) return;
+    const controller = new AbortController();
+    Promise.allSettled(ids.map((id) => api.get(`/products/${id}`, { signal: controller.signal }))).then((results) => {
+      if (controller.signal.aborted) return;
+      refreshedCurrency.current = settings.currency;
+      const fresh = new Map(results.filter((r) => r.status === "fulfilled").map((r) => [r.value.data.product._id, r.value.data.product]));
+      setCart((current) => current.map((item) => {
+        const product = fresh.get(item.product._id); if (!product) return item;
+        const variant = product.variants?.find((v) => v.sku === item.variantSku);
+        return { ...item, currency: settings.currency, product: { ...product, price: variant?.price ?? product.price, stock: variant?.stock ?? product.stock } };
+      }));
+      setWishlist((current) => current.map((product) => fresh.get(product._id) || product));
+    });
+    return () => controller.abort();
+  }, [settings.currency, settingsError]);
   useEffect(() => {
     if (!toast) return undefined;
     const timer = window.setTimeout(() => setToast(""), 2800);
@@ -100,7 +119,7 @@ export function ShopProvider({ children }) {
       const match = current.find((item) => (item.cartKey || item.product._id) === cartKey);
       return match
         ? current.map((item) => (item.cartKey || item.product._id) === cartKey ? { ...item, product: snapshot, quantity: Math.min(item.quantity + quantity, stock, 99) } : item)
-        : [...current, { product: snapshot, quantity: Math.min(quantity, stock, 99), cartKey, variantSku, variantLabel: variant ? [variant.size, variant.color].filter(Boolean).join(" / ") || variant.sku : "" }];
+        : [...current, { product: snapshot, currency: settings.currency, quantity: Math.min(quantity, stock, 99), cartKey, variantSku, variantLabel: variant ? [variant.size, variant.color].filter(Boolean).join(" / ") || variant.sku : "" }];
     });
     setToast(`${product.name} added to your bag`);
   };

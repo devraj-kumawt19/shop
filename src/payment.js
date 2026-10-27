@@ -1,7 +1,7 @@
 import api from "./api.js";
 
 let checkoutScript;
-function loadCheckout() {
+export function loadCheckout() {
   if (window.Razorpay) return Promise.resolve();
   if (!checkoutScript) checkoutScript = new Promise((resolve, reject) => {
     const script = document.createElement("script");
@@ -13,6 +13,19 @@ function loadCheckout() {
     document.head.appendChild(script);
   });
   return checkoutScript;
+}
+
+export async function topUpWallet(amount, requestKey) {
+  const { data } = await api.post("/wallet/topups", { amount, requestKey });
+  if (data.paid) return data;
+  await loadCheckout();
+  return new Promise((resolve, reject) => {
+    let verifying = false;
+    const checkout = new window.Razorpay({ key: data.key, amount: data.amount, currency: data.currency, name: data.name, description: "Add money to Shop Wallet", order_id: data.gatewayOrderId, prefill: data.prefill, theme: { color: "#2563eb" },
+      handler: async (response) => { verifying = true; try { resolve((await api.post(`/wallet/topups/${data.id}/verify`, response)).data); } catch (error) { reject(error); } },
+      modal: { ondismiss: () => { if (!verifying) reject(new Error("Top-up was not completed. If money was debited, use Check payment in your wallet.")); } },
+    }); checkout.open();
+  });
 }
 
 export async function payForOrder(orderId) {

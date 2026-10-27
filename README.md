@@ -143,7 +143,7 @@ For **Razorpay + cash on delivery**:
 
 1. Put `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` in `server/.env`. Start with test-mode keys.
 2. In Razorpay, enable automatic payment capture. Add a webhook at your public API's `/api/payments/webhook` URL, subscribe to `payment.captured` and use the same webhook secret.
-3. In Super admin → Website settings, enable Razorpay. Select **INR for UPI** and set your actual INR catalog/shipping prices first. The existing catalog defaults to USD to preserve earlier pricing. Currency selection does not convert prices; USD checkout requires a Razorpay account enabled for that currency. Orders keep a currency snapshot, and dashboard totals are grouped by currency.
+3. In Super admin → Website settings, enable Razorpay. Select **INR for UPI** and set your actual INR catalog/shipping prices first. The catalog now defaults to INR. Existing USD catalog values can be converted once using the migration command below. Currency selection does not convert prices; USD checkout requires a Razorpay account enabled for that currency. Orders keep a currency snapshot, and dashboard totals are grouped by currency.
 4. Test a payment, cancellation, retry and webhook before enabling live keys. The app creates the gateway order server-side, checks callback signatures, fetches the captured payment and validates its order, amount and currency before confirming the order. It never receives card details. See the [official Razorpay integration guide](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps/) and [webhook validation guide](https://razorpay.com/docs/webhooks/validate-test/).
 
 Unpaid online orders do not reserve stock and remain awaiting payment. Stock is allocated transactionally after capture; repeated callbacks/webhooks do not allocate it twice. If an item sells out before payment is confirmed, the order is cancelled and flagged `refund_required`, and both parties receive a payment-review notification. Refunds must be reviewed and issued in the gateway dashboard; the app does not issue refunds automatically. Cancelling a paid, unshipped order also marks it for refund review. Unpaid orders cannot be fulfilled through the admin status selector.
@@ -190,3 +190,49 @@ Integration references: [OpenAI text generation](https://developers.openai.com/a
 
 
 For an opt-in check against your configured MongoDB connection, set `RUN_COMMERCE_INTEGRATION=1` locally and run `npm run verify:commerce`. It creates a new randomly named `shopsphere_feature_qa_*` database, runs actual transaction/rollback/concurrent-checkout tests, then removes only that QA database. Existing store data is not modified. The database account must permit creating/removing a separate QA database. No payment, email, courier or AI provider is called. Use a test Atlas account if the normal application account cannot create an isolated database.
+
+
+## Shop Wallet, shopping festival and Quick delivery
+
+The new customer routes are `/wallet`, `/sale` and `/quick-delivery`. The navigation and homepage link to each page. Customer-facing catalog prices default to INR, while historical orders/invoices retain their original currency.
+
+### Shop Wallet
+
+The wallet stores **integer paise** in MongoDB and has a unique, append-only transaction ledger. Customers can add INR 100-10,000 per top-up through the existing Razorpay integration, inspect their latest 100 transactions and pay a full INR order using their available balance. There are no direct balance-edit, transfer or withdrawal endpoints. Wallet purchases of sample products are rejected.
+
+The server creates the provider order, verifies callback HMACs, fetches the captured payment and validates the exact amount, currency and gateway order before crediting. The existing signed `/api/payments/webhook` now reconciles both order payments and wallet top-ups. Repeated callbacks/webhooks and concurrent captures cannot credit the same top-up twice. Pending top-ups with an existing gateway order appear on the wallet page with **Check payment** so a customer can reconcile a captured payment after closing checkout.
+
+Wallet debits, product stock changes, coupons and order creation run in the same MongoDB transaction. The client supplies a unique checkout key and retries reuse it, preventing duplicate orders/debits. Insufficient balances reject checkout; balances cannot go below zero. Cancelling an unshipped wallet order credits the original order total once and marks it refunded. Refunded wallet orders cannot be reopened; place a new order instead. These refunds return to the store wallet, not a bank account.
+
+The owner can view total customer wallet balances and recent ledger activity under **Super admin / Shop Wallet**. **Website settings / Shop Wallet & 15-minute delivery** can pause new wallet payments/top-ups while preserving balance/history access. Top-ups require INR currency, enabled online payments and all three existing Razorpay variables: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`. No additional provider key is introduced. Enable the captured-payment webhook and test with Razorpay test keys before real funding; fixture tests do not make real charges.
+
+### Sale page
+
+`/sale` includes a branded shopping-festival hero, discounts calculated from actual product price/compare-at price, a product spotlight, category tiles, budget/discount sorting and active coupon offers. There are no invented bank discounts, sales counts or stock countdowns. Set the sale headline/description and optional **sale event end** in Website settings. A countdown appears only for a configured future end time; ending an event does not automatically reprice products. Update catalog prices when an offer should expire. Coupon expiry and usage limits continue to be enforced by the server.
+
+### 15-minute delivery
+
+`/quick-delivery` checks a six-digit delivery PIN and shows the Quick catalog. Express checkout requires all of the following on the server: Quick enabled, INR currency, a configured service PIN, current time inside the configured IST operating window, every product marked Quick eligible and sufficient stock. Standard delivery remains available. Express uses its own delivery fee and snapshots a 15-minute estimated arrival when the order is confirmed (after capture for Razorpay).
+
+Configure **Website settings / Shop Wallet & 15-minute delivery**:
+
+- Turn on **Enable 15-minute delivery** after local fulfillment is ready.
+- Enter only actual serviceable PIN codes, separated by commas or spaces. No production PIN code is assumed.
+- Set the express fee (default INR 29) and operating hours in IST (default 08:00-23:00).
+- Mark the appropriate products **Eligible for 15-minute delivery** in the product editor.
+
+The page remains available while service areas are being set up. Empty/unconfigured areas cannot use express checkout. Fifteen minutes is an estimate; the application does not dispatch a delivery fleet or guarantee traffic conditions. Online captures recheck express eligibility; if service or stock is no longer available, the existing refund-review flow applies rather than silently substituting another delivery method.
+
+### One-time USD-to-INR conversion
+
+The conversion snapshot is **INR 95.18 per USD**, reference date **2026-10-26**, retrieved from [Frankfurter's published USD/INR reference](https://api.frankfurter.dev/v1/latest?base=USD&symbols=INR). This is a fixed one-time catalog repricing, not a live exchange rate feed. Sample catalog values and the default shipping amounts use the same rate.
+
+For a configured existing USD database, run from the repository root:
+
+```sh
+npm --prefix server run convert-to-inr
+```
+
+The command briefly pauses checkout for 60 seconds to drain old requests, then converts product/variant prices, compare-at prices, USD coupon monetary values, price-alert targets, USD saved carts and shipping settings in a transaction. Percentage coupon rates are unchanged; dollar amounts in the announcement are updated. Checkout resumes afterward. Existing orders, invoices, captured payment amounts and INR wallet balances are not converted. Running it again on an INR catalog is a no-op. The script needs the intended database's `MONGO_URI` in `server/.env`; deploy the latest application code alongside the migration. New clients refresh cached cart/wishlist product prices, and checkout rejects stale displayed currency/subtotals.
+
+`npm test` includes wallet ledger bounds, callback/webhook signatures and ownership, duplicate credits/refunds, delivery eligibility and conversion policy checks. `RUN_COMMERCE_INTEGRATION=1` plus `npm run verify:commerce` also exercises real transaction-backed wallet concurrency, express orders, currency migration idempotency and unchanged historical order values in an isolated QA database that is removed afterward.

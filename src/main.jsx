@@ -6,6 +6,7 @@ import "./theme.css";
 import "./ui-refinements.css";
 import "./navigation.css";
 import "./commerce.css";
+import "./marketplace.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
