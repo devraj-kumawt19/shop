@@ -1,19 +1,39 @@
-import { defaultStoreSettings } from "./storeSettings.js";
-import { staffPermissions } from "./permissions.js";
+import { defaultStoreSettings } from "../../storeSettings.js";
 
 export function requireSuperAdmin(req, res, next) {
   if (req.user?.role !== "superadmin") return res.status(403).json({ message: "Super admin access is required." });
   return next();
 }
 
+// Opt-in pagination preserves the response and behavior expected by existing staff screens.
+export function adminListQuery(query, kind) {
+  const page = Number(query.page);
+  if (!Number.isInteger(page) || page < 1 || page > 100000) throw Object.assign(new Error("Enter a valid page number."), { status: 400 });
+  const search = typeof query.search === "string" ? query.search.trim().slice(0, 100) : "";
+  const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const fields = kind === "products" ? ["name", "category"] : ["orderNumber", "shippingAddress.email", "shippingAddress.firstName", "shippingAddress.lastName"];
+  const filter = search ? { $or: fields.map((field) => ({ [field]: { $regex: escaped, $options: "i" } })) } : {};
+  if (query.status) {
+    if (kind === "products") {
+      if (query.status === "in_stock") filter.stock = { $gt: 0 };
+      else if (query.status === "low_stock") filter.stock = { $gt: 0, $lte: 5 };
+      else if (query.status === "out_of_stock") filter.stock = 0;
+      else throw Object.assign(new Error("Choose a valid stock filter."), { status: 400 });
+    } else {
+      if (!["awaiting_payment", "placed", "processing", "shipped", "delivered", "cancelled"].includes(query.status)) throw Object.assign(new Error("Choose a valid order status."), { status: 400 });
+      filter.status = query.status;
+    }
+  }
+  return { page, limit: 25, filter };
+}
+
 export function validateUserUpdate(actor, target, input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return "Enter valid account updates.";
   if (actor.id === target.id || target.role === "superadmin") return "Super admin accounts cannot be changed here.";
   const keys = Object.keys(input);
-  if (!keys.length || keys.some((key) => !["role", "isActive", "permissions"].includes(key))) return "Only account role, permissions and status can be updated.";
-  if ("role" in input && !["customer", "admin"].includes(input.role)) return "Choose customer or admin. Super admins are provisioned securely on the server.";
+  if (!keys.length || keys.some((key) => !["role", "isActive"].includes(key))) return "Only account role and status can be updated.";
+  if ("role" in input && !["customer", "seller"].includes(input.role)) return "Choose customer or seller. Super Admins require a secure invitation or server provisioning.";
   if ("isActive" in input && typeof input.isActive !== "boolean") return "Account status must be true or false.";
-  if ("permissions" in input && (!Array.isArray(input.permissions) || input.permissions.some((value) => !staffPermissions.includes(value)) || new Set(input.permissions).size !== input.permissions.length)) return "Choose valid, distinct staff permissions.";
   return "";
 }
 

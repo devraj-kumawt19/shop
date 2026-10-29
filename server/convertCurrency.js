@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { Product, Coupon, ProductAlert, CartState, StoreSettings } from "./models.js";
+import { Product, Coupon, ProductAlert, CartState, StoreSettings } from "./db/models.js";
 import { toRupees, INR_RATE, INR_RATE_DATE } from "./currency.js";
 import { defaultStoreSettings } from "./storeSettings.js";
 

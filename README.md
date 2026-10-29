@@ -1,6 +1,6 @@
 # ShopSphere
 
-ShopSphere is a React/Vite single-page storefront with a separate Express API. Product browsing, search, category filters, cart, wishlist, registration, sign-in, profile details and profile photos, cash-on-delivery checkout, order history, and an admin console are included. Profile photos are resized to JPEG in the browser and stored on the user's MongoDB record with an 180 KB limit.
+ShopSphere is a React/Vite single-page storefront with a separate Express API. Product browsing, search, category filters, cart, wishlist, registration, sign-in, profile details and profile photos, cash-on-delivery checkout, order history, seller listings, and the Super Admin workspace are included. Profile photos are resized to JPEG in the browser and stored on the user's MongoDB record with an 180 KB limit.
 
 ## Requirements
 
@@ -39,34 +39,133 @@ ShopSphere is a React/Vite single-page storefront with a separate Express API. P
 
    Open the Vite URL shown in the terminal (normally `http://localhost:5173`). Vite proxies `/api` to `http://localhost:5000` for local development. Set `VITE_API_URL` in a root `.env` file to use another API.
 
-6. To enable the admin console, fill `ADMIN_EMAIL`, `ADMIN_NAME`, and a unique `ADMIN_PASSWORD` (12 or more characters) in `server/.env`, then run:
+6. For owner access, use the existing Super Admin account at `/super-admin/login`. For a first-time setup, configure `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_NAME` and `SUPER_ADMIN_PASSWORD` in `server/.env`, then run:
 
    ```sh
-   npm --prefix server run create-admin
+   npm --prefix server run create-super-admin
    ```
 
-   Register or sign in with that account and visit `/admin`. Never commit `.env` files or share database credentials.
+   There is one store management panel: Super Admin. Additional owners require a secure invitation.
 
 If the API is offline, product pages use a clearly labeled preview catalog; authentication, checkout, and admin changes require the API and database to be available. No customer, order, or database data is faked in preview mode.
 
+## Super Admin structure
+
+All store management code lives in `src/super-admin/` and `server/super-admin/`. The regular Admin module and its setup command have been removed. Start with `src/App.jsx` for page routes and `server/app.js` for API mounting.
+
+```text
+src/
+  super-admin/
+    SuperAdminRoutes.jsx
+    SuperAdminWorkspace.jsx
+    navigation.js
+    pages/                         # Login, registration, dashboard, users, owners,
+                                   # products, orders, commerce tools, settings, wallet
+    components/
+      CatalogManager.jsx           # Catalog/order editor; shared seller listing mode
+      VariantEditor.jsx            # Size/color/SKU editor
+      AdminSidebar.jsx
+      AdminNavbar.jsx
+      ProtectedAdminRoute.jsx
+    layouts/
+    hooks/
+    services/
+    styles/                        # All management and commerce-tool styles
+  seller/
+    SellerPage.jsx                 # Existing seller listings only
+
+server/
+  super-admin/
+    routes/
+      superAdminRoutes.js          # Overview, accounts, settings, invitations
+      catalogRoutes.js             # Product, collection and order management
+      commerceToolsRoutes.js       # Inventory, offers, reviews, reports, shipments
+      walletAdminRoutes.js
+    policies/superAdminPolicy.js
+    permissions.js                 # Super Admin access; scoped seller catalog access
+    services/superAdminAuth.js
+    scripts/
+      createSuperAdmin.js
+      resetSuperAdminPassword.js
+  db/                              # Same shared MongoDB connection and models
+  routes/                          # Customer/shared commerce APIs
+  tests/
+```
+
+`/admin` redirects to `/super-admin/dashboard`; `/management` redirects to `/super-admin/commerce`. These aliases always pass through Super Admin route protection. Customer and legacy regular-admin accounts cannot access store management. Existing legacy admin records remain readable and are not automatically promoted; the owner can block them or change them to customer/seller in Users & access. New regular-admin roles and staff permission assignments are rejected by the API. The existing `/api/admin/*` URL namespace remains as an API compatibility path for the consolidated tools and seller listings; it does not expose a separate Admin panel or grant regular admins access.
+
+Customers, sellers, orders, products, shared styles and the MongoDB connection are preserved. Use `npm run dev:api` and `npm run dev` in separate terminals, as before.
+
 ## Super admin control center
 
-The owner dashboard is at `/super-admin`. Super admins can manage products (including homepage featuring), collections, order status, customer and staff access, website branding, homepage hero content, support details, shipping prices and whether checkout accepts new orders. The overview shows live order and inventory counts; the activity log shows the last 100 successful administrator mutations.
+The separate owner workspace starts at `/super-admin/login`. Its invitation registration page is `/super-admin/register`; its protected dashboard is `/super-admin/dashboard`. The existing `/super-admin` URL redirects to the dashboard. Customer and regular administrator accounts cannot sign in through the owner login or access its protected routes.
 
-To provision an owner account, set `MONGO_URI`, `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_NAME`, and a unique `SUPER_ADMIN_PASSWORD` of 12–128 characters in `server/.env`, then run from the project root:
+Super admins can manage products (including homepage featuring), collections, order status, customer and seller access, website branding, homepage hero content, support details, shipping prices and whether checkout accepts new orders. Product and order screens have server-side search, filters and pagination (25 rows per page). **Users & access** and **Super Admins** have paginated search and role/status filters. In Users & access, you can also create a seller with a name, email and password of at least 12 characters; share that password securely. The seller signs in at `/login` and is directed to `/seller`, where they can publish products immediately and manage only their own listings and stock. Seller listings are attributed to their account; blocking or changing a seller's role hides those listings from the storefront and checkout.
+
+The dashboard reads live MongoDB counts for users, Super Admin owners, products and orders. Revenue includes paid orders excluding cancelled/unpaid orders and keeps INR/USD totals separate. Monthly user/order charts show six UTC calendar months, including zero-activity months. Recent orders, recent administrator changes and a separate activity log use real backend data.
+
+The frontend module is isolated while reusing the store's Axios configuration, authentication context and existing catalog/order editors:
+
+```text
+src/super-admin/
+  SuperAdminRoutes.jsx        # Login, invitation registration and protected routes
+  SuperAdminWorkspace.jsx     # Shared data loading and mutation controller
+  navigation.js
+  pages/                     # Login, register, dashboard, users, owners, products,
+                             # orders, collections, settings, activity and wallet
+  components/                # Sidebar, navbar/profile menu, route guard, cards,
+                             # charts, invitation form and password fields
+  layouts/                   # Independent workspace and authentication layouts
+  hooks/                     # Server-verified owner session
+  services/                  # API methods using the existing Axios client
+  styles/super-admin.css
+```
+
+`src/App.jsx` imports the owner routes directly from `src/super-admin/SuperAdminRoutes.jsx`. All management APIs live in `server/super-admin/routes/`. They use authentication middleware in `server/app.js` and the same `User`, `Product`, `Order`, settings and activity collections in `server/db/models.js`. `server/super-admin/services/superAdminAuth.js` handles invitation issuance and acceptance. There is no duplicated application or separate database.
+
+For the first owner, set `MONGO_URI`, `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_NAME`, and a unique `SUPER_ADMIN_PASSWORD` of at least 12 characters and at most 72 UTF-8 bytes in `server/.env`, then run from the project root:
 
 ```sh
 npm --prefix server run create-super-admin
-npm run start:api
 ```
 
-Sign in at `/login`; a super admin is redirected to `/super-admin`. If the email already belongs to an account, the command promotes that account and keeps its existing password. There are no default owner credentials and public registration always creates a customer. The command needs a reachable MongoDB database; the dashboard never substitutes preview data for users or orders.
+Sign in at `/super-admin/login` using the provisioned owner's credentials. If an owner already exists, use that account; rerunning setup is unnecessary. If the configured email already belongs to an account, the command promotes that account, keeps its existing password and invalidates previous sessions. There are no default owner credentials and regular public registration always creates a customer. The command needs a reachable MongoDB database; the dashboard never substitutes preview data for users or orders.
 
-Customer and admin accounts can be blocked or assigned the customer/admin role. Super admin accounts are protected from changes in the UI and API to avoid owner lockout; provision additional owners with the server command. Every authenticated request loads the current account role and status, so blocking and role changes also affect previously issued tokens.
+For additional owners, sign in as an existing Super Admin, open **Super Admins** at `/super-admin/owners`, and create an invitation for the new owner's email. Copy the displayed link and share it securely; the app does not send it by email. The recipient opens `/super-admin/register` using that link and creates a password. Invitations use 256-bit random tokens, store only SHA-256 hashes, expire after 24 hours and work only once for the invited email. The link carries its token in the URL fragment, which the registration form removes from the address bar after reading it. Account creation and invitation consumption happen in one MongoDB transaction; the inviter must still be an active Super Admin. Existing accounts are never silently promoted by accepting an invitation. As with existing checkout transactions, MongoDB Atlas or another replica set is required.
+
+To explicitly reset an existing super admin's password, set `SUPER_ADMIN_EMAIL` to that account's email and `SUPER_ADMIN_PASSWORD` to a new password of at least 12 characters and at most 72 UTF-8 bytes in `server/.env`, then run:
+
+```sh
+npm --prefix server run reset-super-admin-password
+```
+
+This reset command only updates an existing super-admin account; if you have not provisioned it yet, run `create-super-admin` first. Restart the API after changing `.env`, then sign in using the configured email and new password. Do not share either password or database credentials.
+
+Customer, seller and retired legacy-admin accounts can be blocked or assigned the customer/seller role. Regular-admin provisioning and permission assignment are disabled. Super admin accounts are protected from changes in the UI and API to avoid owner lockout; provision additional owners with an invitation or the server command. Every authenticated request loads the current account role, status and session version, so blocking, role changes and owner logout take effect on existing tokens. Newly issued owner JWTs expire after two hours. The profile menu's **Sign out on all devices** calls the backend to invalidate issued sessions before clearing local authentication; owner password resets also invalidate previous sessions. Authentication reuses the project's existing bearer-token storage and bcrypt password hashing. Both owner authentication endpoints are rate limited; all owner management APIs require the current database role to be `superadmin`.
 
 Website settings are stored in MongoDB and applied to the storefront on reload (or immediately after the owner saves). Shipping charges and the checkout pause are enforced by the server. Update the announcement bar when changing a shipping promotion. Activity logging is best effort and contains the actor, HTTP method, resource path and timestamp; request bodies and passwords are not logged. Existing changes before this feature was installed are not backfilled.
 
-Run the authorization and settings checks with `npm --prefix server test`. These exercise real HTTP routing and JWT authentication with isolated database model stubs; live database persistence needs a configured MongoDB instance.
+No new secrets are needed. Use the existing server-only `MONGO_URI` and `JWT_SECRET`; `SUPER_ADMIN_*` variables are only for server provisioning/reset. The frontend continues using `VITE_API_URL=/api`. Never copy server secrets into Vite variables.
+
+Run the API and frontend in two terminals from the project root (do not reseed an existing store):
+
+```sh
+# Install once
+npm install
+npm --prefix server install
+
+# Terminal 1: existing API and database
+npm run dev:api
+
+# Terminal 2: React/Vite (http://localhost:5173/super-admin/login)
+npm run dev
+
+# Validation
+npm test
+npm run build
+```
+
+The tests exercise real HTTP routing and JWT authentication with isolated database model stubs, including owner login, invitation expiry/replay/mismatched email, rollback, logout, forged role claims, authorization, settings and overview data. Live persistence requires a configured MongoDB instance.
 
 ## Production build
 
@@ -105,7 +204,7 @@ Set these in Vercel → Project → Settings → Environment Variables, for Prod
 
 Never prefix database, authentication, payment or email secrets with `VITE_`: Vite exposes prefixed values in the browser bundle. Local `.env` files are excluded from upload in `.vercelignore`; set real production secrets in the Vercel dashboard. MongoDB Atlas must permit connections from your deployment's egress network, and the database user needs access to the selected database. Order placement/payment reconciliation requires a transaction-capable Atlas deployment. A missing configuration or failed connection returns JSON 503; it is not reported as healthy.
 
-Optional server-only variables remain unchanged: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RESEND_API_KEY`, `RESEND_FROM`, and `ORDER_NOTIFICATION_EMAIL`. Point Razorpay's webhook to `https://shop-sand-gamma.vercel.app/api/payments/webhook` for this deployment. Admin provisioning variables are needed only for the one-time provisioning scripts, not normal API requests. Deployment does not seed products or create an administrator automatically.
+Optional server-only variables remain unchanged: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RESEND_API_KEY`, `RESEND_FROM`, and `ORDER_NOTIFICATION_EMAIL`. Point Razorpay's webhook to `https://shop-sand-gamma.vercel.app/api/payments/webhook` for this deployment. Super Admin provisioning variables are needed only for the one-time provisioning scripts, not normal API requests. Deployment does not seed products or create an administrator automatically.
 
 MongoDB connections and in-flight connection promises are reused within a warm function instance, with a small pool and bounded connection timeout. Failed connections can be retried by later requests. The function never disconnects the pool at the end of a request.
 
@@ -128,7 +227,7 @@ The separate Render deployment remains optional: use `render.yaml`, keep secrets
 - `/`, `/products`, `/products/:id`, `/categories/:category`
 - `/cart`, `/wishlist`, `/checkout`
 - `/login`, `/register`, `/my-orders`, `/my-orders/:id`, `/profile`
-- `/admin` (administrator account required)
+- `/admin` (redirects to the protected Super Admin dashboard)
 - `/super-admin` (super administrator account required)
 
 The API is mounted at `/api`; `GET /api/health` reports API and database connection status.
@@ -159,17 +258,17 @@ Validation: `npm --prefix server test` covers role enforcement, COD checkout, pa
 
 OTP, forgot-password and administrator 2FA were intentionally left out of this upgrade. Existing password sign-in and server-side authentication remain in place.
 
-Open **Super admin / Commerce tools**, or visit `/management` after signing in as an authorized administrator. The original `/admin` catalog/order workspace remains available. Customer notifications are at `/notifications`; invoices and shipment history are in each customer's order details.
+Open **Super Admin / Commerce tools** at `/super-admin/commerce`. Catalog and orders are managed from the same Super Admin sidebar. The old `/management` and `/admin` page URLs redirect into this protected panel. Customer notifications are at `/notifications`; invoices and shipment history are in each customer's order details.
 
 - **Variants:** Add size/color options with unique immutable SKUs, independent prices and stock in the product editor. Existing SKU stock is changed through Inventory, so checkout and adjustments share the same transaction-backed ledger. Prices are reloaded from MongoDB at checkout; browser totals are never trusted. Existing orders keep their original item/variant prices. Product starting price is the cheapest option, including sold-out options; customers must choose an available option.
 - **Offers:** Create fixed or percentage codes with currency, minimum cart value, discount cap, start/expiry dates and total usage limit. Each customer can use a code once. Capacity and customer use are reserved transactionally for online orders; pending reservations expire after 30 minutes and are released by maintenance. Shipping eligibility uses the subtotal after discounts. Cancelled orders release the reservation; discounted cancelled orders must be reordered rather than reopened. Captures arriving after the payment window are flagged for refund review, not fulfilled automatically.
 - **Inventory:** Adjust stock with a reason, inspect recent movements and import up to 100 rows atomically. CSV header: `productId,variantSku,stock,reason`. `stock` is the desired final quantity; use a blank SKU for products without options. Product IDs/SKUs appear in the overview. Low-stock crossings queue an owner email when the recipient and email provider are configured. Earlier stock changes are not backfilled. Products in active orders cannot be deleted.
-- **Reviews:** Customers can submit/update one review per product after a delivered purchase, with up to three HTTPS photo URLs. Photos use externally hosted URLs; this does not upload files to Vercel. Staff with review permission can hide/publish reviews. Ratings are calculated from published verified reviews. Preview/sample rating figures are not added to product structured data.
+- **Reviews:** Customers can submit/update one review per product after a delivered purchase, with up to three HTTPS photo URLs. Photos use externally hosted URLs; this does not upload files to Vercel. Super Admins can hide/publish reviews. Ratings are calculated from published verified reviews. Preview/sample rating figures are not added to product structured data.
 - **Reports:** 7/30/90-day order value and online collected amounts grouped by currency, daily UTC charts, best-selling quantities and inactive signed-in customer carts (30+ minutes), plus CSV export. Order value includes COD orders and is not profit or cash collected. Best-seller item value is before order-level discounts/shipping. Carts are repriced by the server when saved; guest carts are local only. Current screens show at most 100 inactive carts, 100 recent stock movements, 100 review submissions, 200 coupons and 500 inventory products.
-- **Staff permissions:** The owner assigns catalog, inventory, orders, support, reviews and reports under Users & access. New staff promoted through the dashboard start with no scopes; select the required permissions. Existing legacy administrator accounts without a permission list retain their previous full access. An explicit empty list grants no staff scopes. A super admin always retains owner access. Public registration cannot assign roles or permissions.
-- **Shipment tracking:** Assign a carrier, AWB, optional HTTPS carrier link and delivery estimate in Shipments. Customers see shipment history and the order page polls the store API every 30 seconds. Set the carrier to `Shiprocket` for courier sync; while the shipment is active, opening/polling the order page requests courier updates with a five-minute cache. A manual refresh button uses the same cache. Provider scans never change payment or fulfillment state. Staff still mark order fulfillment status in the Orders workspace. Other couriers work through the entered tracking link and manually managed order states.
+- **Management access:** Only Super Admins manage catalog, inventory, orders, support, reviews and reports. Sellers manage their own listings. Legacy regular-admin accounts have no management access, and new regular-admin roles or permission assignments are rejected. Owner provisioning requires a secure invitation or the server command.
+- **Shipment tracking:** Assign a carrier, AWB, optional HTTPS carrier link and delivery estimate in Shipments. Customers see shipment history and the order page polls the store API every 30 seconds. Set the carrier to `Shiprocket` for courier sync; while the shipment is active, opening/polling the order page requests courier updates with a five-minute cache. A manual refresh button uses the same cache. Provider scans never change payment or fulfillment state. Super Admins mark order fulfillment status in the Orders workspace. Other couriers work through the entered tracking link and manually managed order states.
 - **Notifications:** Price-drop and back-in-stock subscriptions are on product pages; customers can remove them in Notifications. They use the product's starting price and total stock, not individual variant availability. Triggered subscriptions are one-shot; changes are checked when product prices/stock are updated through the application. Direct database changes do not generate alerts. Order-status changes queue customer email and an inbox update. Emails use the existing durable Resend outbox.
-- **Invoices:** Order owners and authorized order/support staff can download authenticated PDFs with original item prices, discounts, shipping, currency and actual payment state. Pending online orders are labelled pro forma; COD invoices say payment pending. This is an order invoice without tax calculation or GST registration fields, not an automatically generated GST tax invoice. Noto Sans Devanagari fonts embed English and Hindi names/addresses; fields are not translated.
+- **Invoices:** Order owners and Super Admins can download authenticated PDFs with original item prices, discounts, shipping, currency and actual payment state. Pending online orders are labelled pro forma; COD invoices say payment pending. This is an order invoice without tax calculation or GST registration fields, not an automatically generated GST tax invoice. Noto Sans Devanagari fonts embed English and Hindi names/addresses; fields are not translated.
 - **Shopping assistant:** Enable it in Website settings only after configuring the OpenAI server variables below. Questions are sent to the Responses API with a bounded public catalog subset. No order/customer account data or mutation tools are exposed. Six requests per minute per function instance are permitted; production-wide spend caps/rate limits should also be set on the provider account. No AI replies are simulated when configuration is missing. The selected model must support the Responses API.
 - **SEO:** `/sitemap.xml` and `/robots.txt` are served by the API. Direct product URLs receive HTML with server-rendered title/description, canonical URL, Open Graph image and Product/Offer JSON-LD, then load the SPA. Product metadata is generated from MongoDB, not a preview catalog. These routes are routed ahead of the SPA fallback in `vercel.json`; the built HTML template and invoice fonts are included with the function.
 

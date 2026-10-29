@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import { defaultStoreSettings } from "./storeSettings.js";
+import { defaultStoreSettings } from "../storeSettings.js";
 
 const { Schema, model } = mongoose;
 
@@ -8,14 +8,16 @@ const userSchema = new Schema({
   name: { type: String, required: true, trim: true, minlength: 2, maxlength: 80 },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true, minlength: 8, select: false },
-  role: { type: String, enum: ["customer", "admin", "superadmin"], default: "customer" },
+  // "admin" is a retired legacy role, retained only so existing accounts remain readable.
+  role: { type: String, enum: ["customer", "seller", "admin", "superadmin"], default: "customer" },
   isActive: { type: Boolean, default: true },
+  authVersion: { type: Number, default: 0 },
   permissions: { type: [String], enum: ["catalog", "inventory", "orders", "reviews", "reports", "support"], default: undefined },
   profileImage: { type: String, default: "", maxlength: 245800 },
 }, { timestamps: true });
 
 userSchema.pre("save", async function hashPassword() {
-  if (this.isModified("password")) this.password = await bcrypt.hash(this.password, 12);
+  if (this.isModified("password")) this.password = await bcrypt.hash(this.password, 7);
 });
 userSchema.methods.checkPassword = function checkPassword(password) {
   return bcrypt.compare(password, this.password);
@@ -36,6 +38,8 @@ const productSchema = new Schema({
   featured: { type: Boolean, default: false },
   quickEligible: { type: Boolean, default: false },
   isDemo: { type: Boolean, default: false },
+  isPublished: { type: Boolean, default: true },
+  seller: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
   variants: [{ sku: { type: String, required: true }, size: String, color: String, price: { type: Number, required: true, min: 0 }, stock: { type: Number, required: true, min: 0 } }],
 }, { timestamps: true });
 productSchema.index({ name: "text", description: "text", category: "text" });
@@ -101,6 +105,15 @@ export const User = mongoose.models.User || model("User", userSchema);
 export const Product = mongoose.models.Product || model("Product", productSchema);
 export const Category = mongoose.models.Category || model("Category", categorySchema);
 export const Order = mongoose.models.Order || model("Order", orderSchema);
+
+const superAdminInvitationSchema = new Schema({
+  email: { type: String, required: true, lowercase: true, trim: true },
+  tokenHash: { type: String, required: true, unique: true, select: false },
+  invitedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
+  acceptedAt: { type: Date, default: null },
+}, { timestamps: true });
+export const SuperAdminInvitation = mongoose.models.SuperAdminInvitation || model("SuperAdminInvitation", superAdminInvitationSchema);
 
 const settingFields = Object.fromEntries(Object.entries(defaultStoreSettings).map(([key, value]) => [key, {
   type: typeof value === "number" ? Number : typeof value === "boolean" ? Boolean : String,

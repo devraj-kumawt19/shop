@@ -1,0 +1,4 @@
+/* Admin-only rules extracted from src/ui-refinements.css; shared customer styles stay in the original stylesheet. */
+
+.admin-stats b { overflow-wrap: anywhere; }
+.admin-email-status { display: block; margin: 5px 0; color: #96a4b7; font-size: 10px; }

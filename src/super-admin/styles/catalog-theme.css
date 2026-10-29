@@ -1,0 +1,10 @@
+/* Admin-only rules extracted from src/theme.css; shared customer styles stay in the original stylesheet. */
+
+.admin-product-form, .admin-stats > div { border-radius: 14px; }
+.admin-product-form label { color: #587090; font-size: 12px; }
+.admin-product-form input, .admin-product-form select, .admin-product-form textarea { min-height: 47px; border-color: #dce5f2; border-radius: 9px; font-size: 13px; transition: border-color .2s, box-shadow .2s; }
+.admin-product-form input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #2563eb0d; }
+.admin-tabs button.active { border-color: var(--blue); color: var(--blue); }
+.admin-table { font-size: 12px; }
+.admin-table th { font-size: 10px; }
+.admin-table td button, .admin-table select { font-size: 11px; }

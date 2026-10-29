@@ -1,4 +1,4 @@
-import { Inbox, ProductAlert, Notification } from "./models.js";
+import { Inbox, ProductAlert, Notification } from "./db/models.js";
 import { formatMoney } from "./storeSettings.js";
 const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 

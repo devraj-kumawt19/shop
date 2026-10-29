@@ -2,15 +2,15 @@ import { test, before, after, beforeEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { User, StoreSettings, AuditLog } from "../models.js";
-import { validateSettings, validateUserUpdate } from "../adminPolicy.js";
+import { User, Product, StoreSettings, AuditLog } from "../db/models.js";
+import { validateSettings, validateUserUpdate } from "../super-admin/policies/superAdminPolicy.js";
 import { defaultStoreSettings, shippingFor } from "../storeSettings.js";
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "test-only-secret-for-super-admin-tests-at-least-32-characters";
 const { app } = await import("../index.js");
 const ids = { owner: "aaaaaaaaaaaaaaaaaaaaaaaa", admin: "bbbbbbbbbbbbbbbbbbbbbbbb", customer: "cccccccccccccccccccccccc", blocked: "dddddddddddddddddddddddd" };
-let server, base, users, stored, activity;
+let server, base, users, stored, activity, productUpdates;
 const account = (key, role, isActive = true) => ({ id: ids[key], _id: ids[key], name: key, email: `${key}@example.test`, role, isActive, createdAt: new Date().toISOString(), save: async function () { users[this.id] = this; } });
 const token = (key, role) => jwt.sign({ sub: ids[key], role }, process.env.JWT_SECRET);
 async function request(path, { key, role, method = "GET", body } = {}) {
@@ -25,6 +25,7 @@ async function request(path, { key, role, method = "GET", body } = {}) {
 before(async () => {
   // Exercise real Express authentication, JWT verification, routing and validation with isolated model stubs.
   mongoose.connection.readyState = 1;
+  mock.method(mongoose, "startSession", async () => ({ withTransaction: async (operation) => operation(), endSession: async () => {} }));
   mock.method(User, "findById", async (id) => users[id] || null);
   mock.method(User, "findOne", ({ email }) => ({ select: async () => Object.values(users).find((user) => user.email === email) || null }));
   mock.method(User, "findOneAndUpdate", (filter, update) => ({ select: async () => {
@@ -35,6 +36,7 @@ before(async () => {
   } }));
   mock.method(User, "exists", async () => false);
   mock.method(User, "create", async (input) => { const user = { ...input, id: "eeeeeeeeeeeeeeeeeeeeeeee", role: input.role || "customer" }; users[user.id] = user; return user; });
+  mock.method(Product, "updateMany", async (...args) => { productUpdates.push(args); return { modifiedCount: 1 }; });
   mock.method(StoreSettings, "findById", () => ({ lean: async () => stored }));
   mock.method(StoreSettings, "findByIdAndUpdate", async (id, update) => { stored = { ...stored, ...update.$set }; return stored; });
   mock.method(AuditLog, "create", async (entry) => { activity.push(entry); return entry; });
@@ -45,6 +47,7 @@ beforeEach(() => {
   users = { [ids.owner]: account("owner", "superadmin"), [ids.admin]: account("admin", "admin"), [ids.customer]: account("customer", "customer"), [ids.blocked]: account("blocked", "admin", false) };
   stored = { ...defaultStoreSettings };
   activity = [];
+  productUpdates = [];
 });
 after(async () => { await new Promise((resolve) => server.close(resolve)); mock.restoreAll(); mongoose.connection.readyState = 0; });
 
@@ -74,11 +77,24 @@ test("login verifies the password and returns a signed bearer token", async () =
   assert.ok(Number.isInteger(payload.exp));
   assert.equal((await request("/auth/login", { method: "POST", body: { email: "customer@example.test", password: "wrong-password" } })).status, 401);
 });
-test("public registration cannot inject super admin role or blocked status", async () => {
+test("public registration cannot inject privileged seller or admin roles", async () => {
   const result = await request("/auth/register", { method: "POST", body: { name: "Test User", email: "new@example.test", password: "example-password-123", role: "superadmin", isActive: false } });
   assert.equal(result.status, 201);
   assert.equal(result.body.user.role, "customer");
   assert.equal(users[result.body.user.id].isActive, undefined);
+});
+test("only super admins can create seller accounts with validated passwords", async () => {
+  const body = { name: "Marketplace Seller", email: "SELLER@example.test", password: "seller-password-123" };
+  assert.equal((await request("/super-admin/sellers", { key: "admin", method: "POST", body })).status, 403);
+  for (const invalid of [{ ...body, name: "x" }, { ...body, email: "not-an-email" }, { ...body, password: "short" }]) {
+    assert.equal((await request("/super-admin/sellers", { key: "owner", method: "POST", body: invalid })).status, 400);
+  }
+  const result = await request("/super-admin/sellers", { key: "owner", method: "POST", body });
+  assert.equal(result.status, 201);
+  assert.equal(result.body.seller.role, "seller");
+  assert.equal(result.body.seller.email, "seller@example.test");
+  assert.equal(result.body.seller.password, undefined);
+  assert.equal(users[result.body.seller.id].password, body.password);
 });
 test("customers can save and retrieve a validated profile photo", async () => {
   const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 1, 2, 3, 0xff, 0xd9]);
@@ -114,11 +130,21 @@ test("profile photo updates reject malformed and oversized image data", async ()
   assert.equal(users[ids.customer].profileImage, undefined);
 });
 test("super admin can update customer access; blocking takes effect on existing tokens", async () => {
-  assert.equal((await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { role: "admin" } })).status, 200);
+  assert.equal((await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { role: "admin" } })).status, 400);
+  assert.equal((await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { role: "customer" } })).status, 200);
   assert.equal((await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { isActive: false } })).status, 200);
   assert.equal((await request("/auth/me", { key: "customer" })).status, 401);
   assert.equal(activity.length, 2);
   assert.equal(activity[0].actor, ids.owner);
+});
+test("seller role and account status update listing visibility atomically", async () => {
+  const promoted = await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { role: "seller" } });
+  assert.equal(promoted.status, 200);
+  assert.deepEqual(productUpdates[0][0], { seller: ids.customer });
+  assert.deepEqual(productUpdates[0][1], { $set: { isPublished: true } });
+  const blocked = await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { isActive: false } });
+  assert.equal(blocked.status, 200);
+  assert.deepEqual(productUpdates[1][1], { $set: { isPublished: false } });
 });
 test("self-lockout, owner modification, privilege escalation and password injection are rejected", async () => {
   for (const body of [{ role: "customer" }, { isActive: false }]) assert.equal((await request(`/super-admin/users/${ids.owner}`, { key: "owner", method: "PATCH", body })).status, 400);
@@ -145,6 +171,7 @@ test("settings and role policies protect sensitive fields and shipping boundarie
   assert.equal(validateSettings(defaultStoreSettings), "");
   assert.notEqual(validateSettings(JSON.parse('{"__proto__":{"polluted":true}}')), "");
   assert.notEqual(validateUserUpdate(users[ids.owner], users[ids.owner], { role: "admin" }), "");
+  assert.equal(validateUserUpdate(users[ids.owner], users[ids.customer], { role: "seller" }), "");
   assert.equal(shippingFor(7138.49), 661.50);
   assert.equal(shippingFor(7138.50), 0);
   assert.equal(shippingFor(95, { freeShippingThreshold: 100, shippingFee: 9.5 }), 9.5);

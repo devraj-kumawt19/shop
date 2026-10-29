@@ -1,5 +1,5 @@
 import { expirePendingOrders } from "./orderLogic.js";
-import { Notification, Order, Inbox } from "./models.js";
+import { Notification, Order, Inbox } from "./db/models.js";
 import { formatMoney } from "./storeSettings.js";
 
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);

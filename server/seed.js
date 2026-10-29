@@ -1,6 +1,6 @@
 import "dotenv/config";
 import mongoose from "mongoose";
-import { Category, Product, StoreSettings } from "./models.js";
+import { Category, Product, StoreSettings } from "./db/models.js";
 import { categories, demoProducts } from "./demoCatalog.js";
 
 const catalog = categories;

@@ -4,8 +4,8 @@ import http from "node:http";
 import { createHmac } from "node:crypto";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
-import { User, Product, Order } from "../models.js";
-import { connectDatabase } from "../database.js";
+import { User, Product, Order } from "../db/models.js";
+import { connectDatabase } from "../db/connection.js";
 import { resolveApiBase } from "../apiBase.js";
 import { readFile } from "node:fs/promises";
 

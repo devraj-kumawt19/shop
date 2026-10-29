@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import { createHmac } from "node:crypto";
-import { Wallet, WalletEntry, WalletTopup, StoreSettings, User, Order } from "../models.js";
-import { changeWallet, finalizeTopup, refundWalletOrder, topupMinor } from "../wallet.js";
+import { Wallet, WalletEntry, WalletTopup, StoreSettings, User, Order } from "../db/models.js";
+import { changeWallet, finalizeTopup, refundWalletOrder, topupMinor } from "../routes/wallet.js";
 import { quickService, deliveryQuote } from "../quickPolicy.js";
 import { defaultStoreSettings } from "../storeSettings.js";
 import { toRupees, INR_RATE } from "../currency.js";
-import { validateSettings } from "../adminPolicy.js";
+import { validateSettings } from "../super-admin/policies/superAdminPolicy.js";
 
 process.env.NODE_ENV = "test"; process.env.JWT_SECRET = "isolated-wallet-quick-tests-only-secret-32-chars";
 const { app } = await import("../app.js");

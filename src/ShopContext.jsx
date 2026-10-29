@@ -82,8 +82,8 @@ export function ShopProvider({ children }) {
       });
   }, []);
 
-  const signIn = async (credentials, mode) => {
-    const { data } = await api.post(`/auth/${mode}`, credentials);
+  const signIn = async (credentials, mode, endpoint = `/auth/${mode}`) => {
+    const { data } = await api.post(endpoint, credentials);
     if (typeof data.token !== "string" || !data.user || typeof data.user !== "object") {
       throw new Error("ShopSphere API response is invalid.");
     }
@@ -101,11 +101,11 @@ export function ShopProvider({ children }) {
     return data.user;
   };
 
-  const logout = () => {
+  const logout = (destination = "/") => {
     localStorage.removeItem("shopsphere_token");
     setUser(null);
     setToast("You’ve been signed out.");
-    navigate("/");
+    navigate(typeof destination === "string" ? destination : "/");
   };
 
   useEffect(() => {

@@ -184,7 +184,7 @@ body { overflow-x: clip; }
 .detail-promises b { color: #435d80; font-size: 11px; }
 .detail-promises small { color: #8392aa; font-size: 10px; }
 .quantity-control, .detail-wishlist { border-radius: 9px; border-color: #dbe4f2; }
-.order-summary, .profile-card, .admin-product-form, .admin-stats > div, .order-card, .payment-option { border-radius: 14px; }
+.order-summary, .profile-card, .order-card, .payment-option { border-radius: 14px; }
 .order-summary { padding: 26px; border: 1px solid #e4ecf8; background: #f6f9ff; }
 .order-summary h2, .checkout-form h2 { font-weight: 600; font-size: 23px; }
 .summary-line { color: #62748f; font-size: 13px; }
@@ -192,15 +192,11 @@ body { overflow-x: clip; }
 .summary-total strong { font-size: 18px; }
 .shipping-note, .payment-note { font-size: 11px; }
 .checkout-summary { top: 110px; }
-.form-stack label, .checkout-form label, .admin-product-form label { color: #587090; font-size: 12px; }
-.form-stack input, .checkout-form input, .admin-product-form input, .admin-product-form select, .admin-product-form textarea { min-height: 47px; border-color: #dce5f2; border-radius: 9px; font-size: 13px; transition: border-color .2s, box-shadow .2s; }
-.form-stack input:focus, .checkout-form input:focus, .admin-product-form input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #2563eb0d; }
+.form-stack label, .checkout-form label { color: #587090; font-size: 12px; }
+.form-stack input, .checkout-form input { min-height: 47px; border-color: #dce5f2; border-radius: 9px; font-size: 13px; transition: border-color .2s, box-shadow .2s; }
+.form-stack input:focus, .checkout-form input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #2563eb0d; }
 .auth-switch a { color: var(--blue); }
 .profile-avatar { color: var(--blue); font-weight: 600; }
-.admin-tabs button.active { border-color: var(--blue); color: var(--blue); }
-.admin-table { font-size: 12px; }
-.admin-table th { font-size: 10px; }
-.admin-table td button, .admin-table select { font-size: 11px; }
 
 .reveal-ready { opacity: 0; transform: translateY(26px); transition: opacity .75s ease, transform .75s cubic-bezier(.2,.65,.3,1); }
 .reveal-ready.is-visible { opacity: 1; transform: none; }

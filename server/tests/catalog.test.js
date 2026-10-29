@@ -1,7 +1,7 @@
 import { test, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
-import { Category, Product } from "../models.js";
+import { Category, Product } from "../db/models.js";
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "catalog-route-tests-use-an-isolated-secret-with-32-characters";
@@ -19,6 +19,7 @@ let base;
 let queryOptions;
 
 function matches(product, filter) {
+  if (filter.isPublished?.$ne === false && product.isPublished === false) return false;
   if (filter.categorySlug && product.categorySlug !== filter.categorySlug) return false;
   if (filter.featured && product.featured !== filter.featured) return false;
   if (filter.$expr && !(product.compareAtPrice > product.price)) return false;
@@ -64,6 +65,7 @@ test("products API applies category, search, featured, sale, sort and pagination
   assert.match(response.headers.get("content-type"), /application\/json/);
   assert.deepEqual(body, { products: [catalog[0]], total: 2, page: 2, pages: 2 });
   assert.deepEqual(queryOptions.filter, {
+    isPublished: { $ne: false },
     categorySlug: "home",
     featured: true,
     $expr: { $gt: ["$compareAtPrice", "$price"] },

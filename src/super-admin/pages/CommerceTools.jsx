@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, Boxes, Tag, Star, Truck, RefreshCw, Download, Plus, ArrowUpRight, Upload, Activity, X } from "lucide-react";
-import api, { getErrorMessage } from "./api.js";
-import { useMoney, useShop } from "./ShopContext.jsx";
-import { RequireAuth } from "./pages.jsx";
-import { StatusMessage } from "./components.jsx";
-import { can } from "../server/permissions.js";
-import { downloadFile, OrderExtras } from "./CommerceWidgets.jsx";
+import { BarChart3, Boxes, Tag, Star, Truck, RefreshCw, Download, Plus, ArrowUpRight, Upload, Activity } from "lucide-react";
+import api, { getErrorMessage } from "../../api.js";
+import { useMoney, useShop } from "../../ShopContext.jsx";
+import { RequireAuth } from "../../pages.jsx";
+import { StatusMessage } from "../../components.jsx";
+import { can } from "../../../server/super-admin/permissions.js";
+import { downloadFile, OrderExtras } from "../../CommerceWidgets.jsx";
 
 const options = [["reports", "Reports", BarChart3, ["reports"]], ["inventory", "Inventory", Boxes, ["inventory"]], ["coupons", "Offers", Tag, ["catalog"]], ["reviews", "Reviews", Star, ["reviews"]], ["shipments", "Shipments", Truck, ["orders", "support"]]];
 const date = (value) => value ? new Date(value).toLocaleString() : "—";
-export default function AdvancedAdmin({ embedded = false }) {
-  return <RequireAuth admin><Workspace embedded={embedded} /></RequireAuth>;
+export default function CommerceTools({ embedded = false }) {
+  return <RequireAuth superAdmin><Workspace embedded={embedded} /></RequireAuth>;
 }
 function Workspace({ embedded }) {
   const { user } = useShop();
@@ -31,11 +31,11 @@ function Workspace({ embedded }) {
   }
   const Container = embedded ? "section" : "main";
   return <Container id={embedded ? undefined : "main-content"} className={`commerce-workspace ${embedded ? "" : "page-width"}`}>
-    {!embedded && <div className="commerce-heading"><div><span className="eyebrow">A CLEARER VIEW. A SMARTER STORE.</span><h1>Commerce <em>studio.</em></h1><p>Good decisions start with the right details.</p></div><Link className="button button-quiet" to={user?.role === "superadmin" ? "/super-admin" : "/admin"}>Catalog & orders <ArrowUpRight size={16} /></Link></div>}
+    {!embedded && <div className="commerce-heading"><div><span className="eyebrow">A CLEARER VIEW. A SMARTER STORE.</span><h1>Commerce <em>studio.</em></h1><p>Good decisions start with the right details.</p></div><Link className="button button-quiet" to="/super-admin/dashboard">Catalog & orders <ArrowUpRight size={16} /></Link></div>}
     <div className="commerce-toolbar"><nav aria-label="Commerce tools">{tabs.map(([key, label, Icon]) => <button className={tab === key ? "active" : ""} key={key} onClick={() => { if (key !== tab) { setData(null); setLoading(true); setTab(key); setNotice(""); } }}><Icon size={17} />{label}</button>)}</nav><button className="commerce-refresh" aria-label="Refresh data" disabled={loading || busy} onClick={() => setRevision((n) => n + 1)}><RefreshCw size={17} className={loading ? "spin" : ""} /></button></div>
     {error && <StatusMessage tone="error">{error}</StatusMessage>}{notice && <StatusMessage tone="success">{notice}</StatusMessage>}
     {loading && <div className="commerce-loading"><RefreshCw className="spin" /><p>Gathering the details...</p></div>}
-    {!tab && <div className="commerce-empty"><h2>No commerce tools assigned.</h2><p>The owner can assign staff permissions in Users & access.</p></div>}
+    {!tab && <div className="commerce-empty"><h2>No commerce tools assigned.</h2><p>Sign in with a Super Admin account.</p></div>}
     {data && tab === "reports" && <Reports data={data} days={days} setDays={setDays} onError={setError} />}
     {data && tab === "inventory" && <Inventory data={data} busy={busy} mutate={mutate} />}
     {data && tab === "coupons" && <Coupons data={data} busy={busy} mutate={mutate} />}
@@ -86,7 +86,3 @@ function Shipments({ orders, busy, mutate }) {
   </>;
 }
 
-export function VariantEditor({ value = [], onChange, disabled = false, existing = [] }) {
-  const update = (i, field, val) => onChange(value.map((v, n) => n === i ? { ...v, [field]: val } : v));
-  return <fieldset className="variant-editor" disabled={disabled}><legend>Product options</legend><p>Give each size or color its own SKU, price and stock. Leave empty for a standard product.</p>{value.map((v, i) => <div key={i}><label>SKU<input value={v.sku} readOnly={existing.some((item) => item.sku === v.sku)} required pattern="[A-Za-z0-9_-]{2,40}" maxLength={40} onChange={(e) => update(i, "sku", e.target.value.toUpperCase())} /></label><label>Size<input value={v.size || ""} maxLength={40} onChange={(e) => update(i, "size", e.target.value)} /></label><label>Color<input value={v.color || ""} maxLength={40} onChange={(e) => update(i, "color", e.target.value)} /></label><label>Price<input value={v.price} type="number" min=".01" step=".01" required onChange={(e) => update(i, "price", e.target.value === "" ? "" : Number(e.target.value))} /></label><label>Stock<input value={v.stock} readOnly={existing.some((item) => item.sku === v.sku)} type="number" min="0" max="1000000" required onChange={(e) => update(i, "stock", e.target.value === "" ? "" : Number(e.target.value))} /></label><button type="button" aria-label={`Remove variant ${i + 1}`} disabled={existing.some((item) => item.sku === v.sku)} onClick={() => onChange(value.filter((_, n) => n !== i))}><X size={16} /></button></div>)}<button type="button" className="button button-quiet" disabled={value.length >= 50} onClick={() => onChange([...value, { sku: "", size: "", color: "", price: "", stock: 0 }])}><Plus size={14} /> Add option</button></fieldset>;
-}

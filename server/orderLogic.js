@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { Product, Order, Coupon, CouponUse, StockMovement, CartState } from "./models.js";
+import { Product, Order, Coupon, CouponUse, StockMovement, CartState } from "./db/models.js";
 import { bad, discountFor, roundMoney } from "./commercePolicy.js";
 
 export async function priceCart(items, session) {
@@ -12,7 +12,7 @@ export async function priceCart(items, session) {
     if (quantity > 99) throw bad("You can order up to 99 of each product option.");
     combined.set(key, { product: item.product, variantSku: item.variantSku || "", quantity });
   }
-  let query = Product.find({ _id: { $in: [...new Set([...combined.values()].map((item) => item.product))] } });
+  let query = Product.find({ _id: { $in: [...new Set([...combined.values()].map((item) => item.product))] }, isPublished: { $ne: false } });
   if (session) query = query.session(session);
   const products = await query.lean();
   const orderItems = [...combined.values()].map((item) => {

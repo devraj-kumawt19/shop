@@ -1,7 +1,5 @@
-import { VariantEditor } from "./AdvancedAdmin.jsx";
 import { MarketplaceStrip } from "./DealsPage.jsx";
 import { OrderExtras } from "./CommerceWidgets.jsx";
-import { can } from "../server/permissions.js";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowUpRight, ArrowLeft, ArrowRight, Camera, Check, ChevronRight, Heart, LoaderCircle, Mail, Minus, PackageCheck, Plus, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Star, Tag, Trash2, Truck, UserRound } from "lucide-react";
@@ -11,10 +9,8 @@ import { useCategories, useProduct, useProducts } from "./hooks/useProducts.js";
 import { useMoney, useShop } from "./ShopContext.jsx";
 import { ProductCard, ProductGrid, StatusMessage } from "./components.jsx";
 import Reveal from "./Reveal.jsx";
-import { formatMoney } from "../server/storeSettings.js";
 import { payForOrder } from "./payment.js";
 
-const orderTotalLabel = (orders) => { const totals = {}; for (const order of orders.filter((item) => !["cancelled", "awaiting_payment"].includes(item.status))) { const currency = order.currency || "USD"; totals[currency] = (totals[currency] || 0) + order.total; } return Object.entries(totals).map(([currency, total]) => formatMoney(total, currency)).join(" / ") || "-"; };
 const subtotalFor = (cart) => cart.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
 
 async function prepareProfilePhoto(file) {
@@ -185,11 +181,11 @@ export function WishlistPage() {
 
 export { default as AuthPage } from "./AuthPage.jsx";
 
-export function RequireAuth({ children, admin = false, superAdmin = false }) {
+export function RequireAuth({ children, superAdmin = false, seller = false }) {
   const { user } = useShop();
   const location = useLocation();
   if (!user) return <Navigate to="/login" state={{ from: `${location.pathname}${location.search}${location.hash}` }} replace />;
-  if ((admin && !["admin", "superadmin"].includes(user.role)) || (superAdmin && user.role !== "superadmin")) return <main id="main-content" className="page-width empty-state"><span className="eyebrow">RESTRICTED ACCESS</span><h1>{superAdmin ? "Super admin" : "Admin"} access only.</h1><p>Sign in with an authorized account to manage the website.</p><Link to="/" className="button button-dark">Back to the shop</Link></main>;
+  if ((superAdmin && user.role !== "superadmin") || (seller && user.role !== "seller")) return <main id="main-content" className="page-width empty-state"><span className="eyebrow">RESTRICTED ACCESS</span><h1>{superAdmin ? "Super admin" : seller ? "Seller" : "Account"} access only.</h1><p>Sign in with an authorized account to manage the website.</p><Link to="/" className="button button-dark">Back to the shop</Link></main>;
   return children;
 }
 
@@ -350,164 +346,6 @@ export function ProfilePage() {
       </div>
     </main>
   </RequireAuth>;
-}
-
-export function AdminPage({ embedded = false, initialTab = "products" }) {
-  const money = useMoney();
-  const { user } = useShop();
-  const catalogAccess = can(user, "catalog"), ordersAccess = can(user, "orders") || can(user, "support");
-  const [variants, setVariants] = useState([]);
-  const AdminContainer = embedded ? "section" : "main";
-  const [products, setProducts] = useState([]);
-  const [categoryItems, setCategoryItems] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState(can(user, "catalog") ? initialTab : "orders");
-  const [formOpen, setFormOpen] = useState(false);
-  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [editingCategory, setEditingCategory] = useState(null);
-
-  async function loadDashboard() {
-    try {
-      const [productResult, orderResult, categoryResult] = await Promise.all([
-        catalogAccess ? api.get("/admin/products") : Promise.resolve({ data: { products: [] } }), ordersAccess ? api.get("/admin/orders") : Promise.resolve({ data: { orders: [] } }), catalogAccess ? api.get("/admin/categories") : Promise.resolve({ data: { categories: [] } }),
-      ]);
-      setProducts(productResult.data.products);
-      setOrders(orderResult.data.orders);
-      setCategoryItems(categoryResult.data.categories);
-      setError("");
-    } catch (requestError) { setError(getErrorMessage(requestError)); }
-  }
-  useEffect(() => { loadDashboard(); }, [user?.id, user?.permissions]);
-
-  async function saveProduct(event) {
-    event.preventDefault();
-    setBusy(true);
-    const form = Object.fromEntries(new FormData(event.currentTarget));
-    const chosenCategory = categoryItems.find((item) => item.slug === form.category);
-    const payload = {
-      ...form,
-      ...(can(user, "inventory") ? { variants } : {}),
-      price: Number(form.price),
-      compareAtPrice: Number(form.compareAtPrice || 0),
-      stock: Number(form.stock),
-      featured: form.featured === "on",
-      isDemo: form.isDemo === "on",
-      quickEligible: form.quickEligible === "on",
-      category: chosenCategory?.name || form.category,
-      categorySlug: form.category,
-    };
-    if (editing) delete payload.stock;
-    try {
-      if (editing) await api.patch(`/admin/products/${editing._id}`, payload);
-      else await api.post("/admin/products", payload);
-      setNotice(editing ? "Product updated." : "Product added.");
-      setEditing(null);
-      setFormOpen(false);
-      await loadDashboard();
-    } catch (requestError) { setError(getErrorMessage(requestError)); }
-    finally { setBusy(false); }
-  }
-
-  async function deleteProduct(product) {
-    if (!window.confirm(`Remove ${product.name} from the store?`)) return;
-    try {
-      await api.delete(`/admin/products/${product._id}`);
-      setNotice("Product removed.");
-      await loadDashboard();
-    } catch (requestError) { setError(getErrorMessage(requestError)); }
-  }
-
-  async function changeOrderStatus(orderId, status) {
-    try {
-      await api.patch(`/admin/orders/${orderId}`, { status });
-      setNotice("Order status updated.");
-      await loadDashboard();
-    } catch (requestError) { setError(getErrorMessage(requestError)); }
-  }
-
-  async function retryEmails(orderId) { setBusy(true); setError(""); try { const { data } = await api.post(`/admin/orders/${orderId}/notifications`); setNotice(data.message); await loadDashboard(); } catch (error) { setError(getErrorMessage(error)); } finally { setBusy(false); } }
-
-  async function saveCategory(event) {
-    event.preventDefault();
-    setBusy(true);
-    const form = Object.fromEntries(new FormData(event.currentTarget));
-    try {
-      if (editingCategory) await api.patch(`/admin/categories/${editingCategory._id}`, form);
-      else await api.post("/admin/categories", form);
-      setNotice(editingCategory ? "Category updated." : "Category added.");
-      setCategoryFormOpen(false);
-      setEditingCategory(null);
-      await loadDashboard();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function deleteCategory(category) {
-    if (!window.confirm(`Remove the ${category.name} category?`)) return;
-    try {
-      await api.delete(`/admin/categories/${category._id}`);
-      setNotice("Category removed.");
-      await loadDashboard();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-    }
-  }
-
-  return (
-    <RequireAuth admin>
-      <AdminContainer id={embedded ? undefined : "main-content"} className={embedded ? "admin-page admin-embedded" : "page-width admin-page"}>
-        <div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><span>Admin</span></div>
-        <div className="section-heading"><div><span className="eyebrow">THE SHOP, BEHIND THE SCENES</span><h1>ShopSphere <em>studio.</em></h1></div><Link className="button button-dark" to="/management">Commerce tools <ArrowUpRight size={16} /></Link></div>
-        {error && <StatusMessage tone="error">{error}</StatusMessage>}
-        {notice && <StatusMessage tone="success">{notice}</StatusMessage>}
-        <div className="admin-stats"><div><span>PRODUCTS</span><b>{products.length}</b></div><div><span>CATEGORIES</span><b>{categoryItems.length}</b></div><div><span>ACTIVE ORDER VALUE</span><b>{orderTotalLabel(orders)}</b></div></div>
-        <div className="admin-toolbar">
-          <div className="admin-tabs">
-            {catalogAccess && <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>Products</button>}
-            {catalogAccess && <button className={tab === "categories" ? "active" : ""} onClick={() => setTab("categories")}>Categories</button>}
-            {ordersAccess && <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}>Orders</button>}
-          </div>
-          {tab === "products" && <button className="button button-dark" onClick={() => { setEditing(null); setVariants([]); setFormOpen(!formOpen); }}>+ Add product</button>}
-          {tab === "categories" && <button className="button button-dark" onClick={() => { setEditingCategory(null); setCategoryFormOpen(!categoryFormOpen); }}>+ Add category</button>}
-        </div>
-        {formOpen && tab === "products" && <form key={editing?._id || "new-product"} className="admin-product-form" onSubmit={saveProduct}>
-          <h2>{editing ? "Edit product" : "Add a thoughtful find"}</h2>
-          <div className="form-grid">
-            <label>Product name<input name="name" defaultValue={editing?.name} required /></label>
-            <label>Category<select name="category" defaultValue={categoryItems.find((item) => item.name === editing?.category)?.slug || ""} required><option value="" disabled>Choose a category</option>{categoryItems.map((item) => <option value={item.slug} key={item._id}>{item.name}</option>)}</select></label>
-            <label>Price<input name="price" type="number" step=".01" min=".01" defaultValue={editing?.price} required /></label>
-            <label>Compare at<input name="compareAtPrice" type="number" step=".01" min="0" defaultValue={editing?.compareAtPrice || 0} /></label>
-            <label>Stock<input name="stock" type="number" min="0" defaultValue={editing?.stock || 0} required readOnly={Boolean(editing)} />{editing && <small>Adjust stock in <Link to="/management">Commerce tools / Inventory</Link>.</small>}</label>
-            <label>Badge<input name="badge" defaultValue={editing?.badge} placeholder="BESTSELLER" /></label>
-          </div>
-          {can(user, "inventory") && <VariantEditor value={variants} onChange={setVariants} existing={editing?.variants || []} />}
-          <label>Image URL<input name="image" type="url" defaultValue={editing?.image} required /></label>
-          <label>Description<textarea name="description" rows="3" defaultValue={editing?.description} required /></label>
-          <label className="check-field"><input name="featured" type="checkbox" defaultChecked={editing?.featured} /> Show on homepage featured products</label>
-          <label className="check-field"><input name="quickEligible" type="checkbox" defaultChecked={editing?.quickEligible} /> Eligible for 15-minute delivery in configured areas</label>
-          <label className="check-field"><input name="isDemo" type="checkbox" defaultChecked={editing?.isDemo} /> Demo product (test payments only)</label>
-          <div className="admin-form-actions"><button type="button" className="button button-quiet" onClick={() => { setEditing(null); setFormOpen(false); }}>Cancel</button><button className="button button-dark" disabled={busy}>{busy ? "Saving..." : editing ? "Save changes" : "Create product"}</button></div>
-        </form>}
-        {categoryFormOpen && tab === "categories" && <form key={editingCategory?._id || "new-category"} className="admin-product-form" onSubmit={saveCategory}>
-          <h2>{editingCategory ? "Edit collection" : "Add a collection"}</h2>
-          <div className="form-grid"><label>Category name<input name="name" defaultValue={editingCategory?.name} required minLength="2" /></label><label>URL slug<input name="slug" defaultValue={editingCategory?.slug} placeholder="auto-created-from-name" /></label></div>
-          <label>Image URL<input name="image" type="url" defaultValue={editingCategory?.image} placeholder="https://..." /></label>
-          <label>Description<input name="description" defaultValue={editingCategory?.description} /></label>
-          <div className="admin-form-actions"><button type="button" className="button button-quiet" onClick={() => { setCategoryFormOpen(false); setEditingCategory(null); }}>Cancel</button><button className="button button-dark" disabled={busy}>{busy ? "Saving..." : editingCategory ? "Save category" : "Create category"}</button></div>
-        </form>}
-        {tab === "products" && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>PRODUCT</th><th>CATEGORY</th><th>PRICE</th><th>STOCK</th><th>ACTIONS</th></tr></thead><tbody>{products.map((product) => <tr key={product._id}><td><div className="admin-product-name"><img src={product.image} alt="" /><span>{product.name}</span></div></td><td>{product.category}</td><td>{money(product.price)}</td><td>{product.stock}</td><td><button onClick={() => { setEditing(product); setVariants((product.variants || []).map(({ sku, size, color, price, stock }) => ({ sku, size, color, price, stock }))); setFormOpen(true); window.scrollTo({ top: 500, behavior: "smooth" }); }}>Edit</button><button className="delete-button" onClick={() => deleteProduct(product)}>Delete</button></td></tr>)}</tbody></table>{!products.length && <p className="admin-empty">No products yet. Create your first one above.</p>}</div>}
-        {tab === "categories" && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>CATEGORY</th><th>URL SLUG</th><th>DESCRIPTION</th><th>ACTIONS</th></tr></thead><tbody>{categoryItems.map((category) => <tr key={category._id}><td>{category.name}</td><td>{category.slug}</td><td>{category.description || "—"}</td><td><button onClick={() => { setEditingCategory(category); setCategoryFormOpen(true); window.scrollTo({ top: 500, behavior: "smooth" }); }}>Edit</button><button className="delete-button" onClick={() => deleteCategory(category)}>Delete</button></td></tr>)}</tbody></table>{!categoryItems.length && <p className="admin-empty">No categories yet. Create a collection above.</p>}</div>}
-        {tab === "orders" && ordersAccess && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>TOTAL</th><th>PAYMENT</th><th>STATUS</th></tr></thead><tbody>{orders.map((order) => <tr key={order._id}><td>{order.orderNumber}</td><td>{order.user?.name || order.shippingAddress.firstName}</td><td>{money(order.total, order.currency || "USD")}</td><td><span>{order.paymentMethod === "wallet" ? `Wallet - ${order.paymentStatus}` : order.paymentMethod === "razorpay" ? `Online - ${order.paymentStatus || "pending"}` : "Cash on delivery"}</span><small className="admin-email-status">Email: {order.emailStatus?.customer || "not_queued"}</small><button disabled={busy || !can(user, "orders") || order.status === "awaiting_payment"} onClick={() => retryEmails(order._id)}>Retry unsent emails</button></td><td><select disabled={!can(user, "orders") || order.status === "awaiting_payment" || order.paymentStatus === "refund_required"} value={order.status} onChange={(event) => changeOrderStatus(order._id, event.target.value)}><option value="awaiting_payment" disabled>Awaiting payment</option><option value="placed">Placed</option><option value="processing">Processing</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option></select></td></tr>)}</tbody></table>{!orders.length && <p className="admin-empty">Orders will show up here when customers check out.</p>}</div>}
-      </AdminContainer>
-    </RequireAuth>
-  );
 }
 
 export function NotFoundPage() {

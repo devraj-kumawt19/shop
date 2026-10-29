@@ -1,28 +1,28 @@
 import express from "express";
-import { createWalletRouter, changeWallet, refundWalletOrder, validRequestKey, ensureWallet } from "./wallet.js";
+import { createWalletRouter, changeWallet, validRequestKey, ensureWallet } from "./routes/wallet.js";
 import { quickService, deliveryQuote } from "./quickPolicy.js";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { Category, Order, Product, User, StockMovement } from "./models.js";
-import { requireSuperAdmin } from "./adminPolicy.js";
-import { auditAdminChanges, getStoreSettings, superAdminRouter } from "./superAdmin.js";
+import { Category, Order, Product, User } from "./db/models.js";
+import { requireSuperAdmin } from "./super-admin/policies/superAdminPolicy.js";
+import { auditAdminChanges, getStoreSettings, superAdminRouter } from "./super-admin/routes/superAdminRoutes.js";
 import { shippingFor } from "./storeSettings.js";
-import { createPaymentsRouter, paymentsConfigured, razorpayWebhook } from "./payments.js";
+import { createPaymentsRouter, paymentsConfigured, razorpayWebhook } from "./routes/payments.js";
 import { dispatchNotifications, enqueueOrderEmails } from "./notifications.js";
-import { connectDatabase, requireDatabase } from "./database.js";
-import { deferTask } from "./background.js";
+import { connectDatabase, requireDatabase } from "./db/connection.js";
 import { timingSafeEqual } from "node:crypto";
-import { Notification } from "./models.js";
-import { priceCart, quoteCoupon, reserveCoupon, releaseCoupon, changeStock, markCartConverted, expirePendingOrders } from "./orderLogic.js";
-import { normalizeVariants, roundMoney } from "./commercePolicy.js";
-import { can, permit } from "./permissions.js";
-import { notifyProductChange, queueOrderUpdate } from "./customerEvents.js";
-import { createCommerceRouter } from "./commerceRoutes.js";
-import { seoRouter } from "./seo.js";
+import { priceCart, quoteCoupon, reserveCoupon, changeStock, markCartConverted, expirePendingOrders } from "./orderLogic.js";
+import { roundMoney } from "./commercePolicy.js";
+import { notifyProductChange } from "./customerEvents.js";
+import { createCommerceRouter } from "./routes/commerce.js";
+import { seoRouter } from "./routes/seo.js";
 import { isValidProfileImage } from "./profileImage.js";
+import { createCatalogRouter } from "./super-admin/routes/catalogRoutes.js";
+import { walletAdminRouter } from "./super-admin/routes/walletAdminRoutes.js";
+import { acceptInvitation } from "./super-admin/services/superAdminAuth.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -51,7 +51,7 @@ app.use(express.json({ limit: "1mb" }));
 app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 40, standardHeaders: "draft-7", legacyHeaders: false }));
 
 const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
-const signToken = (user) => jwt.sign({ sub: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
+const signToken = (user) => jwt.sign({ sub: user.id, role: user.role, version: user.authVersion || 0 }, process.env.JWT_SECRET, { expiresIn: user.role === "superadmin" ? "2h" : "7d" });
 const publicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role, profileImage: user.profileImage || "", ...(Array.isArray(user.permissions) ? { permissions: user.permissions } : {}) });
 
 async function authenticate(req, res, next) {
@@ -62,6 +62,7 @@ async function authenticate(req, res, next) {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(payload.sub);
     if (!user || user.isActive === false) return res.status(401).json({ message: "This account is unavailable or blocked. Please contact support." });
+    if ((payload.version || 0) !== (user.authVersion || 0)) return res.status(401).json({ message: "Your session has ended. Please sign in again." });
     req.user = user;
     return next();
   } catch (error) {
@@ -72,11 +73,6 @@ async function authenticate(req, res, next) {
   }
 }
 
-function requireAdmin(req, res, next) {
-  if (!["admin", "superadmin"].includes(req.user.role)) return res.status(403).json({ message: "Admin access is required." });
-  next();
-}
-
 function validateAddress(address) {
   const fields = ["firstName", "lastName", "email", "street", "city", "state", "postalCode", "phone"];
   if (!address || fields.some((field) => typeof address[field] !== "string" || !address[field].trim())) {
@@ -84,14 +80,6 @@ function validateAddress(address) {
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address.email)) return "Enter a valid email address.";
   return "";
-}
-
-function isHttpUrl(value) {
-  try {
-    return ["http:", "https:"].includes(new URL(value).protocol);
-  } catch {
-    return false;
-  }
 }
 
 app.get("/api/health", asyncRoute(async (req, res) => {
@@ -130,12 +118,24 @@ app.post("/api/auth/register", requireDatabase, asyncRoute(async (req, res) => {
   return res.status(201).json({ user: publicUser(user), token: signToken(user) });
 }));
 
-app.post("/api/auth/login", requireDatabase, asyncRoute(async (req, res) => {
+const login = (superAdminOnly = false) => asyncRoute(async (req, res) => {
   const { email, password } = req.body || {};
-  if (typeof email !== "string" || typeof password !== "string") return res.status(400).json({ message: "Enter your email and password." });
-  const user = await User.findOne({ email: email.trim().toLowerCase() }).select("+password");
+  if (typeof email !== "string" || email.length > 254 || typeof password !== "string" || !password || password.length > 128) return res.status(400).json({ message: "Enter your email and password." });
+  const user = await User.findOne({ email: email.trim().toLowerCase() }).select("+password +authVersion");
   if (!user || user.isActive === false || !(await user.checkPassword(password))) return res.status(401).json({ message: "Email or password is incorrect, or the account is unavailable." });
+  if (superAdminOnly && user.role !== "superadmin") return res.status(403).json({ message: "Super admin access is required. Use the store sign-in for your account." });
   return res.json({ user: publicUser(user), token: signToken(user) });
+});
+app.post("/api/auth/login", requireDatabase, login());
+app.use("/api/super-admin/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 40, standardHeaders: "draft-7", legacyHeaders: false }));
+app.post("/api/super-admin/auth/login", requireDatabase, login(true));
+app.post("/api/super-admin/auth/register", requireDatabase, asyncRoute(async (req, res) => {
+  const user = await acceptInvitation(req.body);
+  return res.status(201).json({ user: publicUser(user), token: signToken(user) });
+}));
+app.post("/api/auth/logout", requireDatabase, authenticate, asyncRoute(async (req, res) => {
+  await User.updateOne({ _id: req.user.id }, { $inc: { authVersion: 1 } });
+  return res.json({ message: "Signed out on all devices." });
 }));
 
 app.get("/api/auth/me", requireDatabase, authenticate, (req, res) => res.json({ user: publicUser(req.user) }));
@@ -162,7 +162,7 @@ app.get("/api/categories", requireDatabase, asyncRoute(async (req, res) => {
 
 app.get("/api/products", requireDatabase, asyncRoute(async (req, res) => {
   const { category, search, featured, sort, sale, quick } = req.query;
-  const filter = {};
+  const filter = { isPublished: { $ne: false } };
   if (typeof category === "string" && category) filter.categorySlug = category.toLowerCase();
   if (featured === "true") filter.featured = true;
   if (quick === "true") filter.quickEligible = true;
@@ -180,7 +180,7 @@ app.get("/api/products", requireDatabase, asyncRoute(async (req, res) => {
 
 app.get("/api/products/:id", requireDatabase, asyncRoute(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: "We couldn't find that product." });
-  const product = await Product.findById(req.params.id).lean();
+  const product = await Product.findOne({ _id: req.params.id, isPublished: { $ne: false } }).lean();
   if (!product) return res.status(404).json({ message: "We couldn't find that product." });
   return res.json({ product });
 }));
@@ -260,198 +260,9 @@ app.get("/api/orders/:id", requireDatabase, authenticate, asyncRoute(async (req,
   return res.json({ order });
 }));
 
+app.use("/api/super-admin/wallet", requireDatabase, authenticate, requireSuperAdmin, walletAdminRouter);
 app.use("/api/super-admin", requireDatabase, authenticate, requireSuperAdmin, auditAdminChanges, superAdminRouter);
-app.use("/api/admin", requireDatabase, authenticate, requireAdmin, (req, res, next) => {
-  const scope = req.path.split("/")[1];
-  const permissions = scope === "orders" ? (req.method === "GET" ? ["orders", "support"] : ["orders"]) : ["catalog"];
-  return permit(...permissions)(req, res, next);
-}, auditAdminChanges);
-app.get("/api/admin/products", asyncRoute(async (req, res) => res.json({ products: await Product.find().sort({ createdAt: -1 }).lean() })));
-app.post("/api/admin/products", asyncRoute(async (req, res) => {
-  const { name, category, description, image, price, compareAtPrice, stock, badge } = req.body || {};
-  if (![name, category, description, image].every((value) => typeof value === "string" && value.trim())) return res.status(400).json({ message: "Name, category, description, and image URL are required." });
-  const parsedImage = new URL(image);
-  if (!["http:", "https:"].includes(parsedImage.protocol)) return res.status(400).json({ message: "Image URL must use HTTP or HTTPS." });
-  if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(stock) || stock < 0) return res.status(400).json({ message: "Enter a positive price and a valid stock quantity." });
-  const slug = String(req.body.categorySlug || category).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  if (!await Category.exists({ slug })) return res.status(400).json({ message: "Choose an existing product category." });
-  const variants = normalizeVariants(req.body.variants || []);
-  if (!can(req.user, "inventory") && (stock > 0 || variants.length)) return res.status(403).json({ message: "Inventory permission is required to set initial stock or product options." });
-  const session = await mongoose.startSession(); let product;
-  try { await session.withTransaction(async () => {
-  [product] = await Product.create([{ name: name.trim(), description, image, badge, category: category.trim(), categorySlug: slug, price: variants.length ? Math.min(...variants.map((v) => v.price)) : price, compareAtPrice: Number(compareAtPrice) || 0, stock: variants.length ? variants.reduce((sum, v) => sum + v.stock, 0) : stock, variants, featured: Boolean(req.body.featured), isDemo: Boolean(req.body.isDemo), quickEligible: Boolean(req.body.quickEligible) }], { session });
-  const initial = variants.length ? variants.filter((v) => v.stock > 0).map((v) => ({ product: product.id, variantSku: v.sku, delta: v.stock, reason: "Initial inventory", actor: req.user.id })) : stock > 0 ? [{ product: product.id, delta: stock, reason: "Initial inventory", actor: req.user.id }] : [];
-  if (initial.length) await StockMovement.create(initial, { session, ordered: true });
-  }); } finally { await session.endSession(); }
-  return res.status(201).json({ product });
-}));
-app.patch("/api/admin/products/:id", asyncRoute(async (req, res) => {
-  const allowed = ["name", "category", "categorySlug", "description", "image", "price", "compareAtPrice", "stock", "badge", "featured", "isDemo", "variants", "quickEligible"];
-  const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowed.includes(key)));
-  for (const key of ["price", "compareAtPrice", "stock"]) if (key in updates && (!Number.isFinite(updates[key]) || updates[key] < 0 || (key === "stock" ? !Number.isInteger(updates[key]) : roundMoney(updates[key]) !== updates[key]) || key === "price" && updates[key] === 0)) return res.status(400).json({ message: "Use a positive price, non-negative compare-at price and whole stock quantities." });
-  if (updates.category && !updates.categorySlug) updates.categorySlug = updates.category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  if (updates.categorySlug && !await Category.exists({ slug: updates.categorySlug })) return res.status(400).json({ message: "Choose an existing product category." });
-  if (updates.image) {
-    const image = new URL(updates.image);
-    if (!["http:", "https:"].includes(image.protocol)) return res.status(400).json({ message: "Image URL must use HTTP or HTTPS." });
-  }
-  const before = await Product.findById(req.params.id).lean();
-  if (!before) return res.status(404).json({ message: "We couldn't find that product." });
-  if (("stock" in updates || "variants" in updates) && !can(req.user, "inventory")) return res.status(403).json({ message: "Inventory permission is required to edit stock or variants." });
-  // Stock edits use the inventory ledger, avoiding races with checkout.
-  if ("stock" in updates && updates.stock !== before.stock) return res.status(409).json({ message: "Change stock in Commerce tools > Inventory to record an adjustment." });
-  if ("variants" in updates) {
-    updates.variants = normalizeVariants(updates.variants);
-    for (const old of before.variants || []) {
-      const next = updates.variants.find((v) => v.sku === old.sku);
-      if (!next || next.stock !== old.stock) return res.status(409).json({ message: "Keep existing SKUs and stock unchanged. Use Inventory to change stock." });
-    }
-    if ((before.variants?.length || before.stock > 0) && updates.variants.some((v) => !before.variants?.some((old) => old.sku === v.sku) && v.stock > 0)) return res.status(409).json({ message: "New options must start with zero stock. Restock in Inventory after saving." });
-    if (!before.variants?.length && updates.variants.length && before.stock !== 0) return res.status(409).json({ message: "Set stock to zero through Inventory before adding variants." });
-    if (updates.variants.length) { updates.stock = updates.variants.reduce((sum, v) => sum + v.stock, 0); updates.price = Math.min(...updates.variants.map((v) => v.price)); }
-  }
-  const session = await mongoose.startSession(); let product;
-  try { await session.withTransaction(async () => {
-    product = await Product.findOneAndUpdate({ _id: before._id, updatedAt: before.updatedAt }, updates, { session, new: true, runValidators: true });
-    if (!product) throw Object.assign(new Error("Product changed. Refresh before editing."), { status: 409 });
-    await notifyProductChange(before, product, await getStoreSettings(), session);
-  }); } finally { await session.endSession(); }
-  return res.json({ product });
-}));
-app.delete("/api/admin/products/:id", asyncRoute(async (req, res) => {
-  const session = await mongoose.startSession();
-  try { await session.withTransaction(async () => {
-    if (await Order.exists({ "items.product": req.params.id, status: { $in: ["awaiting_payment", "placed", "processing", "shipped"] } }).session(session)) throw Object.assign(new Error("This product is in an active order. Resolve the order before deleting it."), { status: 409 });
-    const product = await Product.findByIdAndDelete(req.params.id, { session });
-    if (!product) throw Object.assign(new Error("We couldn't find that product."), { status: 404 });
-  }); } finally { await session.endSession(); }
-  return res.json({ message: "Product removed." });
-}));
-
-app.get("/api/admin/categories", asyncRoute(async (req, res) => res.json({ categories: await Category.find().sort({ name: 1 }).lean() })));
-app.post("/api/admin/categories", asyncRoute(async (req, res) => {
-  const { name, slug, description = "", image = "" } = req.body || {};
-  if (typeof name !== "string" || name.trim().length < 2) return res.status(400).json({ message: "Enter a category name." });
-  if (image && (typeof image !== "string" || !isHttpUrl(image))) return res.status(400).json({ message: "Category image URL must use HTTP or HTTPS." });
-  const normalizedSlug = (typeof slug === "string" && slug.trim() ? slug : name).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  const category = await Category.create({ name: name.trim(), slug: normalizedSlug, description, image });
-  return res.status(201).json({ category });
-}));
-app.patch("/api/admin/categories/:id", asyncRoute(async (req, res) => {
-  const session = await mongoose.startSession();
-  let category;
-  try {
-    await session.withTransaction(async () => {
-      category = await Category.findById(req.params.id).session(session);
-      if (!category) {
-        const missing = new Error("We couldn't find that category.");
-        missing.status = 404;
-        throw missing;
-      }
-      const previousSlug = category.slug;
-      const nextName = typeof req.body.name === "string" ? req.body.name.trim() : category.name;
-      const nameChanged = nextName !== category.name;
-      category.name = nextName;
-      if (typeof req.body.slug === "string" && req.body.slug.trim()) {
-        category.slug = req.body.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-      }
-      if (typeof req.body.description === "string") category.description = req.body.description;
-      if (typeof req.body.image === "string") {
-        if (req.body.image && !isHttpUrl(req.body.image)) {
-          const invalidImage = new Error("Category image URL must use HTTP or HTTPS.");
-          invalidImage.status = 400;
-          throw invalidImage;
-        }
-        category.image = req.body.image;
-      }
-      await category.save({ session });
-      if (previousSlug !== category.slug || nameChanged) {
-        await Product.updateMany(
-          { categorySlug: previousSlug },
-          { categorySlug: category.slug, category: category.name },
-          { session },
-        );
-      }
-    });
-  } catch (error) {
-    if (error.status === 404) return res.status(404).json({ message: error.message });
-    if (error.status === 400) return res.status(400).json({ message: error.message });
-    throw error;
-  } finally {
-    await session.endSession();
-  }
-  return res.json({ category });
-}));
-app.delete("/api/admin/categories/:id", asyncRoute(async (req, res) => {
-  const category = await Category.findById(req.params.id);
-  if (!category) return res.status(404).json({ message: "We couldn't find that category." });
-  if (await Product.exists({ categorySlug: category.slug })) return res.status(409).json({ message: "Move or remove this category's products before deleting it." });
-  await category.deleteOne();
-  return res.json({ message: "Category removed." });
-}));
-app.get("/api/admin/orders", asyncRoute(async (req, res) => {
-  const orders = await Order.find().populate("user", "name email").sort({ createdAt: -1 }).lean();
-  return res.json({ orders });
-}));
-app.post("/api/admin/orders/:id/notifications", asyncRoute(async (req, res) => {
-  const order = await Order.findById(req.params.id);
-  if (!order) return res.status(404).json({ message: "Order not found." });
-  if (order.status === "awaiting_payment") return res.status(409).json({ message: "Order emails are sent only after payment is confirmed." });
-  await enqueueOrderEmails(order, await getStoreSettings());
-  await Notification.updateMany({ order: order.id, status: { $ne: "sent" } }, { $set: { status: "pending", attempts: 0, nextAttempt: new Date() } });
-  deferTask(req, () => dispatchNotifications({ maxJobs: 2, deadline: Date.now() + 40000 }), "Notification queue could not be processed.");
-  res.json({ message: "Unsent order emails have been queued for retry. Sent emails will not be duplicated." });
-}));
-app.patch("/api/admin/orders/:id", asyncRoute(async (req, res) => {
-  const allowed = ["placed", "processing", "shipped", "delivered", "cancelled"];
-  if (!allowed.includes(req.body.status)) return res.status(400).json({ message: "Choose a valid order status." });
-  const session = await mongoose.startSession();
-  let order;
-  try {
-    await session.withTransaction(async () => {
-      order = await Order.findById(req.params.id).session(session);
-      if (!order) {
-        const missing = new Error("We couldn't find that order.");
-        missing.status = 404;
-        throw missing;
-      }
-      const nextStatus = req.body.status;
-      if (order.status === "awaiting_payment" || order.paymentStatus === "refund_required") throw Object.assign(new Error("Payment must be resolved before this order can be changed."), { status: 409 });
-      if (nextStatus === "cancelled" && ["shipped", "delivered"].includes(order.status)) {
-        const alreadyFulfilled = new Error("Only orders that haven't shipped can be cancelled.");
-        alreadyFulfilled.status = 409;
-        throw alreadyFulfilled;
-      }
-      if (order.status !== nextStatus && nextStatus === "cancelled" && order.inventoryCommitted !== false) {
-        for (const item of order.items) {
-          const before = await Product.findById(item.product).session(session).lean();
-          await changeStock(item, item.quantity, { session, actor: req.user.id, reason: "Order cancelled", reference: order.id });
-          await notifyProductChange(before, { ...before, stock: before.stock + item.quantity, updatedAt: new Date() }, await getStoreSettings(), session);
-        }
-        order.inventoryCommitted = false;
-        await refundWalletOrder(order, session);
-        if (order.paymentMethod === "razorpay" && order.paymentStatus === "paid") order.paymentStatus = "refund_required";
-      } else if (order.status === "cancelled" && nextStatus !== "cancelled") {
-        if (order.paymentMethod === "wallet") throw Object.assign(new Error("A refunded wallet order cannot be reopened. Place a new order."), { status: 409 });
-        if (order.couponCode) throw Object.assign(new Error("Cancelled discounted orders cannot be reopened; place a new order."), { status: 409 });
-        for (const item of order.items) await changeStock(item, -item.quantity, { session, actor: req.user.id, reason: "Order reopened", reference: order.id });
-        order.inventoryCommitted = true;
-      }
-      const changed = order.status !== nextStatus;
-      if (changed && nextStatus === "cancelled") await releaseCoupon(order, session);
-      order.status = nextStatus;
-      if (changed) order.timeline.push({ status: nextStatus, message: `Order ${nextStatus}` });
-      await order.save({ session });
-      if (changed) await queueOrderUpdate(order, session);
-    });
-  } catch (error) {
-    if (error.status === 404 || error.status === 409) return res.status(error.status).json({ message: error.message });
-    throw error;
-  } finally {
-    await session.endSession();
-  }
-  return res.json({ order });
-}));
+app.use("/api/admin", createCatalogRouter(authenticate));
 
 app.use((req, res) => res.status(404).json({ message: "That API route was not found." }));
 app.use((error, req, res, next) => {

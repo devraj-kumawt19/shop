@@ -9,8 +9,9 @@ export function validateAuth(values, mode) {
 }
 
 export function authDestination(role, requestedPath) {
-  const fallback = role === "superadmin" ? "/super-admin" : role === "admin" ? "/admin" : "/profile";
-  if (typeof requestedPath !== "string" || !/^\/(checkout|cart|wishlist|profile|my-orders|products|categories|admin|super-admin)(?:\/|\?|#|$)/.test(requestedPath) || requestedPath.includes("\\")) return fallback;
-  if (role === "customer" && /^\/(admin|super-admin)(?:\/|\?|#|$)/.test(requestedPath)) return fallback;
+  const fallback = role === "superadmin" ? "/super-admin/dashboard" : role === "seller" ? "/seller" : "/profile";
+  if (typeof requestedPath !== "string" || !/^\/(checkout|cart|wishlist|profile|my-orders|products|categories|admin|seller|super-admin)(?:\/|\?|#|$)/.test(requestedPath) || requestedPath.includes("\\")) return fallback;
+  if (!["superadmin", "seller"].includes(role) && /^\/(admin|seller|super-admin)(?:\/|\?|#|$)/.test(requestedPath)) return fallback;
+  if (role === "seller" && /^\/(admin|super-admin)(?:\/|\?|#|$)/.test(requestedPath)) return fallback;
   return requestedPath;
 }

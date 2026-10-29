@@ -1,0 +1,73 @@
+/* Admin-only rules extracted from src/styles.css; shared customer styles stay in the original stylesheet. */
+
+
+.admin-page { padding-top: 29px; padding-bottom: 90px; }
+.admin-product-form label { display: grid; gap: 7px; color: #526886; font-size: 11px; }
+.admin-product-form input, .admin-product-form select, .admin-product-form textarea { width: 100%; min-height: 43px; padding: 0 12px; border: 1px solid #dce5f2; border-radius: 0; outline: none; background: #fff; color: var(--ink); font-size: 12px; }
+.admin-product-form input:focus, .admin-product-form select:focus, .admin-product-form textarea:focus { border-color: #2563eb; }
+
+.admin-page .section-heading { margin: 40px 0 27px; }
+
+/* Catalog and order management, shared by staff, sellers and owners. */
+
+.admin-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; }
+
+.admin-stats > div { display: grid; gap: 8px; padding: 17px; background: #eff6ff; }
+
+.admin-stats span { color: #858b81; font-size: 10px; letter-spacing: .13em; }
+
+.admin-stats b { font: 400 25px var(--display); }
+
+.admin-toolbar { display: flex; align-items: center; justify-content: space-between; margin: 26px 0 17px; }
+
+.admin-tabs { display: flex; gap: 20px; }
+
+.admin-tabs button { padding: 8px 0; border: 0; border-bottom: 1px solid transparent; background: transparent; color: #858b81; font-size: 12px; }
+
+.admin-tabs button.active { border-color: var(--ink); color: var(--ink); }
+
+.admin-toolbar .button { min-height: 39px; font-size: 11px; }
+
+.admin-product-form { display: grid; gap: 13px; padding: 20px; margin-bottom: 19px; background: #f3f7fd; }
+
+.admin-product-form h2 { margin: 0 0 5px; font: 400 23px var(--display); }
+
+.admin-product-form select { padding-right: 8px; }
+
+.admin-product-form textarea { padding-top: 10px; resize: vertical; }
+
+.admin-form-actions { display: flex; justify-content: flex-end; gap: 9px; }
+
+.admin-form-actions .button { min-height: 39px; font-size: 11px; }
+
+.admin-table-wrap { overflow-x: auto; }
+
+.admin-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11px; }
+
+.admin-table th { padding: 12px 10px; border-bottom: 1px solid #deded6; color: #8b9088; font-size: 10px; font-weight: 500; letter-spacing: .1em; }
+
+.admin-table td { padding: 12px 10px; border-bottom: 1px solid #eeede7; color: #657065; white-space: nowrap; }
+
+.admin-table td button { margin-right: 11px; border: 0; border-bottom: 1px solid #a6ada4; padding: 0 0 2px; background: transparent; color: #465b4b; font-size: 11px; }
+
+.admin-table td button.delete-button { color: #a04c3e; border-color: #cca098; }
+
+.admin-product-name { display: flex; align-items: center; gap: 9px; color: #3d4d41; }
+
+.admin-product-name img { width: 36px; height: 37px; object-fit: cover; }
+
+.admin-table select { max-width: 120px; border: 1px solid #e5e4dc; padding: 5px; background: white; color: #526052; font-size: 11px; }
+
+.admin-empty { padding: 18px; color: #82887f; font-size: 12px; }
+
+@media (max-width: 760px) {
+  .admin-page { padding-top: 22px; padding-bottom: 65px; }
+  .admin-page .section-heading { margin-top: 31px; }
+  .admin-stats { gap: 7px; }
+  .admin-stats > div { padding: 12px 9px; }
+  .admin-stats span { font-size: 7px; }
+  .admin-stats b { font-size: 20px; }
+  .admin-toolbar { margin: 19px 0 12px; }
+  .admin-product-form { padding: 14px; }
+  .admin-table { min-width: 620px; }
+}

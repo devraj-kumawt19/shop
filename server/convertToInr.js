@@ -2,7 +2,7 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import { convertCatalogToInr } from "./convertCurrency.js";
 import { INR_RATE, INR_RATE_DATE, INR_RATE_SOURCE } from "./currency.js";
-import { StoreSettings } from "./models.js";
+import { StoreSettings } from "./db/models.js";
 if (!process.env.MONGO_URI) throw new Error("Set MONGO_URI in server/.env before converting the catalog.");
 let resumeCheckout = false;
 try {

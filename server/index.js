@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { app } from "./app.js";
-import { connectDatabase } from "./database.js";
+import { connectDatabase } from "./db/connection.js";
 import { startNotificationWorker } from "./notifications.js";
 
 export { app };

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { Order, Product, User, StoreSettings, Notification, StockMovement, CartState, Inbox } from "../models.js";
+import { Order, Product, User, StoreSettings, Notification, StockMovement, CartState, Inbox } from "../db/models.js";
 import { defaultStoreSettings } from "../storeSettings.js";
 import { minorUnits, validSignature, matchesCapturedPayment } from "../paymentPolicy.js";
 import { buildOrderEmail, dispatchNotifications, enqueueOrderEmails } from "../notifications.js";

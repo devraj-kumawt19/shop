@@ -9,8 +9,8 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "seed": "node seed.js",
-    "create-admin": "node createAdmin.js",
-    "create-super-admin": "node createSuperAdmin.js",
+    "create-super-admin": "node super-admin/scripts/createSuperAdmin.js",
+    "reset-super-admin-password": "node super-admin/scripts/resetSuperAdminPassword.js",
     "test": "node --test",
     "convert-to-inr": "node convertToInr.js"
   },

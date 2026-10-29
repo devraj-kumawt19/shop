@@ -2,14 +2,14 @@ import { test, before, beforeEach, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { Product, Order, User, StoreSettings, Coupon, CouponUse, CartState, Review, ProductAlert, Inbox, StockMovement, AuditLog } from "../models.js";
+import { Product, Category, Order, User, StoreSettings, Coupon, CouponUse, CartState, Review, ProductAlert, Inbox, StockMovement, AuditLog } from "../db/models.js";
 import { normalizeVariants, discountFor, validateCoupon, parseCsv, csvCell, paymentWindowOpen } from "../commercePolicy.js";
 import { priceCart, reserveCoupon, releaseCoupon, expirePendingOrders } from "../orderLogic.js";
-import { reviewInput, trackingInput, syncTracking } from "../commerceRoutes.js";
-import { productMetadata, siteUrl } from "../seo.js";
+import { reviewInput, trackingInput, syncTracking } from "../routes/commerce.js";
+import { productMetadata, siteUrl } from "../routes/seo.js";
 import { defaultStoreSettings } from "../storeSettings.js";
-import { can } from "../permissions.js";
-import { validateUserUpdate } from "../adminPolicy.js";
+import { can } from "../super-admin/permissions.js";
+import { validateUserUpdate } from "../super-admin/policies/superAdminPolicy.js";
 import { invoicePdf } from "../invoice.js";
 
 process.env.NODE_ENV = "test";
@@ -17,7 +17,7 @@ process.env.JWT_SECRET = "advanced-test-only-authentication-secret-32-chars";
 const { app } = await import("../app.js");
 const ids = { user: "aaaaaaaaaaaaaaaaaaaaaaaa", other: "bbbbbbbbbbbbbbbbbbbbbbbb", product: "cccccccccccccccccccccccc", order: "dddddddddddddddddddddddd", coupon: "eeeeeeeeeeeeeeeeeeeeeeee" };
 const query = (value) => ({ session() { return this; }, select() { return this; }, populate() { return this; }, sort() { return this; }, skip() { return this; }, limit() { return this; }, lean: async () => value, then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); } });
-let server, base, user, settings, products, coupon, writes, foundOrder, review, inboxFilter, orderFilter, expiry;
+let server, base, user, settings, products, productFilter, coupon, writes, foundOrder, review, inboxFilter, orderFilter, expiry;
 const stockOptions = () => [{ sku: "TEE-M-BLUE", size: "M", color: "Blue", price: 45.5, stock: 3 }, { sku: "TEE-L-BLUE", size: "L", color: "Blue", price: 48, stock: 7 }];
 const sampleOrder = () => ({ id: ids.order, _id: ids.order, orderNumber: "SS-TEST-INVOICE", user: ids.user, items: [{ product: ids.product, name: "Everyday cotton tee", image: "https://example.test/tee.jpg", price: 45.5, quantity: 2, variantSku: "TEE-M-BLUE", variantLabel: "M / Blue" }], subtotal: 91, discount: 9.1, couponCode: "SAVE10", shipping: 0, total: 81.9, currency: "INR", status: "delivered", paymentMethod: "cash_on_delivery", paymentStatus: "pending", createdAt: new Date(), timeline: [], shippingAddress: { firstName: "Test", lastName: "Buyer", email: "test@example.test", street: "123 Example Lane", city: "Delhi", state: "Delhi", postalCode: "110001", phone: "1234567890" }, save: async () => {} });
 async function request(path, { method = "GET", body, anonymous = false } = {}) {
@@ -29,7 +29,21 @@ before(async () => {
   mock.method(mongoose, "startSession", async () => ({ withTransaction: async (handler) => handler(), endSession: async () => {} }));
   mock.method(User, "findById", async () => user);
   mock.method(StoreSettings, "findById", () => query(settings));
-  mock.method(Product, "find", () => query(products));
+  mock.method(Product, "find", (filter) => { productFilter = filter; return query(products.filter((product) => filter?.isPublished?.$ne !== false || product.isPublished !== false)); });
+  mock.method(Product, "findOne", (filter) => query(products.find((product) => String(product._id) === String(filter._id) && (!filter.seller || product.seller === filter.seller)) || null));
+  mock.method(Category, "exists", async ({ slug }) => slug === "home");
+  mock.method(Product, "create", async ([input]) => {
+    const product = { ...input, _id: ids.product, id: ids.product, updatedAt: new Date() };
+    products = [product];
+    return [product];
+  });
+  mock.method(Product, "findOneAndUpdate", async (filter, updates) => {
+    const product = products.find((entry) => String(entry._id) === String(filter._id) && entry.seller === filter.seller && entry.updatedAt === filter.updatedAt);
+    if (!product) return null;
+    const updated = { ...product, ...updates, updatedAt: new Date() };
+    products = [updated];
+    return updated;
+  });
   mock.method(Product, "findById", () => query(products[0]));
   mock.method(Product, "updateOne", async (...args) => { writes.push(["product", ...args]); return { modifiedCount: 1 }; });
   mock.method(Order, "findOne", (filter) => { orderFilter = filter; return query(foundOrder && (!filter.user || filter.user === foundOrder.user) ? foundOrder : null); });
@@ -56,7 +70,7 @@ before(async () => {
   await new Promise((resolve) => { server = app.listen(0, "127.0.0.1", resolve); }); base = `http://127.0.0.1:${server.address().port}`;
 });
 beforeEach(() => {
-  user = { id: ids.user, role: "customer", isActive: true }; settings = { ...defaultStoreSettings, currency: "INR" }; products = [{ _id: ids.product, name: "Everyday cotton tee", image: "https://example.test/tee.jpg", price: 45.5, stock: 10, variants: stockOptions(), description: "A soft everyday cotton tee." }]; coupon = { id: ids.coupon, _id: ids.coupon, code: "SAVE10", type: "percent", amount: 10, minimum: 0, maximumDiscount: 0, maxUses: 10, uses: 0, active: true, currency: "INR" }; writes = []; foundOrder = null; review = {}; expiry = [];
+  user = { id: ids.user, role: "customer", isActive: true }; settings = { ...defaultStoreSettings, currency: "INR" }; products = [{ _id: ids.product, name: "Everyday cotton tee", image: "https://example.test/tee.jpg", price: 45.5, stock: 10, variants: stockOptions(), description: "A soft everyday cotton tee." }]; productFilter = null; coupon = { id: ids.coupon, _id: ids.coupon, code: "SAVE10", type: "percent", amount: 10, minimum: 0, maximumDiscount: 0, maxUses: 10, uses: 0, active: true, currency: "INR" }; writes = []; foundOrder = null; review = {}; expiry = [];
 });
 after(async () => { await new Promise((resolve) => server.close(resolve)); mock.restoreAll(); mongoose.connection.readyState = 0; });
 
@@ -69,6 +83,11 @@ test("cart reprices selected variants, merges quantities and rejects unavailable
   const priced = await priceCart([input, { ...input, quantity: 2 }]); assert.equal(priced.subtotal, 136.5); assert.equal(priced.orderItems.length, 1); assert.equal(priced.orderItems[0].variantLabel, "M / Blue");
   await assert.rejects(priceCart([{ ...input, quantity: 4 }]), /enough stock/); await assert.rejects(priceCart([{ product: ids.product, quantity: 1 }]), /Choose an available option/);
   await assert.rejects(priceCart([{ ...input, quantity: 99 }, { ...input, quantity: 1 }]), /up to 99/);
+});
+test("products hidden after seller deactivation cannot be ordered", async () => {
+  products[0].isPublished = false;
+  await assert.rejects(priceCart([{ product: ids.product, quantity: 1, variantSku: "TEE-M-BLUE" }]), /no longer available/);
+  assert.deepEqual(productFilter.isPublished, { $ne: false });
 });
 test("coupons enforce currency, time windows, caps, minimum and usage limits", () => {
   assert.equal(discountFor(coupon, 91, "INR"), 9.1); assert.equal(discountFor({ ...coupon, maximumDiscount: 5 }, 91, "INR"), 5);
@@ -97,16 +116,57 @@ test("CSV parsing preserves quoted reasons and rejects malformed, wrong-header a
   for (const invalid of ["wrong,header\na,b", 'productId,variantSku,stock,reason\nx,y,2,"unclosed', "x".repeat(100001), "productId,variantSku,stock,reason\na,b,2"]) assert.throws(() => parseCsv(invalid));
   assert.equal(csvCell("=SUM(A1)"), '"\'=SUM(A1)"'); assert.equal(csvCell('a"b'), '"a""b"');
 });
-test("staff scopes use current database permissions and never trust claimed JWT role", async () => {
-  for (const path of ["/admin/inventory", "/admin/coupons", "/admin/reports", "/admin/reviews"]) assert.equal((await request(path)).status, 403);
-  user.role = "admin"; user.permissions = ["inventory"];
-  assert.equal((await request("/admin/inventory")).status, 200); assert.equal((await request("/admin/products")).status, 403); assert.equal((await request("/admin/orders")).status, 403);
-  assert.equal(can({ role: "admin" }, "catalog"), true); assert.equal(can({ role: "admin", permissions: [] }, "catalog"), false); assert.equal(can({ role: "customer", permissions: ["inventory"] }, "inventory"), false); assert.equal(can({ role: "superadmin", permissions: [] }, "reports"), true);
-  assert.notEqual(validateUserUpdate({ id: ids.user }, { id: ids.other, role: "admin" }, { permissions: ["superadmin"] }), "");
+test("management APIs allow only Super Admins and reject retired admin roles even with claimed permissions", async () => {
+  const paths = ["/admin/inventory", "/admin/coupons", "/admin/reports", "/admin/reviews", "/admin/products", "/admin/orders"];
+  for (const path of paths) assert.equal((await request(path)).status, 403);
+  user.role = "admin"; user.permissions = ["inventory", "catalog", "orders", "support"];
+  for (const path of paths) assert.equal((await request(path)).status, 403);
+  assert.equal(can({ role: "admin" }, "catalog"), false);
+  assert.equal(can({ role: "admin", permissions: ["inventory"] }, "inventory"), false);
+  assert.equal(can({ role: "customer", permissions: ["inventory"] }, "inventory"), false);
+  user.role = "superadmin";
+  assert.equal((await request("/admin/inventory")).status, 200);
+  assert.equal(can({ role: "superadmin", permissions: [] }, "reports"), true);
+  assert.notEqual(validateUserUpdate({ id: ids.user }, { id: ids.other, role: "customer" }, { role: "admin" }), "");
+});
+
+test("sellers can only open their product workspace and cannot access store operations", async () => {
+  user.role = "seller";
+  assert.equal((await request("/admin/products")).status, 200);
+  assert.deepEqual(productFilter, { seller: ids.user });
+  for (const path of ["/admin/orders", "/admin/inventory", "/admin/coupons", "/admin/categories"]) {
+    const result = await request(path, { method: path.endsWith("categories") ? "POST" : "GET", body: path.endsWith("categories") ? { name: "Injected collection" } : undefined });
+    assert.equal(result.status, 403, path);
+  }
+  assert.equal(can(user, "catalog"), true);
+  assert.equal(can(user, "inventory"), false);
+});
+test("seller listings publish immediately, belong to their creator and reject edits to another seller's products", async () => {
+  user.role = "seller";
+  const result = await request("/admin/products", {
+    method: "POST",
+    body: { name: "Seller product", category: "Home", categorySlug: "home", description: "A useful product", image: "https://example.test/item.jpg", price: 20, stock: 8, variants: [{ sku: "SELLER-1", size: "M", color: "Blue", price: 20, stock: 8 }], seller: ids.other, featured: true, isDemo: true, quickEligible: true },
+  });
+  assert.equal(result.status, 201);
+  assert.equal(result.body.product.seller, ids.user);
+  assert.equal(result.body.product.isPublished, true);
+  assert.equal(result.body.product.featured, false);
+  assert.equal(result.body.product.isDemo, false);
+  assert.equal(result.body.product.quickEligible, false);
+  assert.equal(writes.find(([type]) => type === "movement")[1][0].delta, 8);
+
+  const updated = await request(`/admin/products/${ids.product}`, { method: "PATCH", body: { price: 20, stock: 8, variants: [{ sku: "SELLER-1", size: "M", color: "Blue", price: 20, stock: 10 }, { sku: "SELLER-2", size: "L", color: "Blue", price: 25, stock: 2 }] } });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.product.stock, 12);
+  assert.deepEqual(writes.filter(([type]) => type === "movement").at(-1)[1].map((movement) => movement.delta), [2, 2]);
+
+  products[0].seller = ids.other;
+  const forbidden = await request(`/admin/products/${ids.product}`, { method: "PATCH", body: { price: 1 } });
+  assert.equal(forbidden.status, 404);
 });
 test("inventory writes include stock movement, reject duplicate import rows and require inventory scope", async () => {
   const body = { productId: ids.product, variantSku: "TEE-M-BLUE", stock: "5", reason: "Restock" };
-  assert.equal((await request("/admin/inventory/adjust", { method: "POST", body })).status, 403); user.role = "admin"; user.permissions = ["inventory"];
+  assert.equal((await request("/admin/inventory/adjust", { method: "POST", body })).status, 403); user.role = "superadmin";
   const result = await request("/admin/inventory/adjust", { method: "POST", body }); assert.equal(result.status, 200); const productWrite = writes.find(([type]) => type === "product"); assert.equal(productWrite[2].$inc["variants.$.stock"], 2); assert.equal(writes.find(([type]) => type === "movement")[1][0].reason, "Restock");
   const row = `${ids.product},TEE-M-BLUE,5,Restock`; const length = writes.length; assert.equal((await request("/admin/inventory/import", { method: "POST", body: { csv: `productId,variantSku,stock,reason\n${row}\n${row}` } })).status, 400); assert.equal(writes.length, length);
 });
@@ -128,11 +188,11 @@ test("price alerts reject higher target prices, invalid types and already availa
   for (const body of [{ type: "price", targetPrice: 100 }, { type: "stock" }, { type: "bad" }]) assert.equal((await request(path, { method: "POST", body })).status, 400);
   assert.equal((await request(path, { method: "POST", body: { type: "price", targetPrice: 40, user: ids.other } })).status, 200); assert.equal(writes.find(([type]) => type === "alert")[1].user, ids.user);
 });
-test("invoice PDFs and tracking reject another customer's order but allow assigned support staff", async () => {
+test("invoice PDFs and tracking reject other customers and retired admins but allow Super Admins", async () => {
   foundOrder = { ...sampleOrder(), user: ids.other };
   assert.equal((await request(`/orders/${ids.order}/invoice`)).status, 404); assert.equal((await request(`/orders/${ids.order}/tracking`)).status, 404);
   user.role = "admin"; user.permissions = ["inventory"]; assert.equal((await request(`/orders/${ids.order}/invoice`)).status, 404);
-  user.permissions = ["support"]; const result = await request(`/orders/${ids.order}/invoice`); assert.equal(result.status, 200); assert.match(result.type, /application\/pdf/); assert.equal(result.body.subarray(0, 5).toString(), "%PDF-");
+  user.permissions = ["support"]; assert.equal((await request(`/orders/${ids.order}/invoice`)).status, 404); user.role = "superadmin"; const result = await request(`/orders/${ids.order}/invoice`); assert.equal(result.status, 200); assert.match(result.type, /application\/pdf/); assert.equal(result.body.subarray(0, 5).toString(), "%PDF-");
 });
 test("PDF invoices paginate long orders and preserve original order currency and amounts", async () => {
   const order = sampleOrder(); order.items = Array.from({ length: 50 }, (_, i) => ({ ...order.items[0], name: `A long product description with a detailed item name ${i + 1}` }));

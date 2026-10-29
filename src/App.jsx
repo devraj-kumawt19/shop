@@ -1,19 +1,19 @@
 import { NotificationsPage, ShoppingAssistant } from "./CommerceWidgets.jsx";
-import AdvancedAdmin from "./AdvancedAdmin.jsx";
+import SellerPage from "./seller/SellerPage.jsx";
 import WalletPage from "./WalletPage.jsx";
 import DealsPage from "./DealsPage.jsx";
 import QuickDeliveryPage from "./QuickDeliveryPage.jsx";
 import { useEffect, useRef } from "react";
-import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
 import { ShopProvider, useShop } from "./ShopContext.jsx";
 import { SiteFooter, StatusMessage } from "./components.jsx";
 import Header from "./Header.jsx";
 import PageTransition from "./PageTransition.jsx";
 import { useCategories } from "./hooks/useProducts.js";
-import SuperAdminPage from "./SuperAdminPage.jsx";
+import SuperAdminRoutes from "./super-admin/SuperAdminRoutes.jsx";
 import {
-  AdminPage, AuthPage, CartPage, CheckoutPage, HomePage, NotFoundPage,
+  AuthPage, CartPage, CheckoutPage, HomePage, NotFoundPage,
   OrderDetailsPage, OrdersPage, ProductDetailPage, ProductsPage, ProfilePage, WishlistPage,
 } from "./pages.jsx";
 
@@ -64,7 +64,7 @@ function FloatingCart({ count }) {
 
 function AppRoutes() {
   const pathname = useLocation().pathname;
-  const controlPanel = pathname === "/super-admin";
+  const controlPanel = pathname === "/super-admin" || pathname.startsWith("/super-admin/");
   const authPage = pathname === "/login" || pathname === "/register";
   const { cart, settingsError } = useShop();
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -74,10 +74,10 @@ function AppRoutes() {
       <RouteTracker />
       <a className="skip-link" href="#main-content">Skip to content</a>
       {!controlPanel && !authPage && <Header />}
-      {!import.meta.env.DEV && settingsError && <div className="page-width app-api-error"><StatusMessage tone="error">{settingsError}</StatusMessage></div>}
+      {!controlPanel && !import.meta.env.DEV && settingsError && <div className="page-width app-api-error"><StatusMessage tone="error">{settingsError}</StatusMessage></div>}
       <Toast hasFloatingCart={showFloatingCart} />
       {showFloatingCart && <FloatingCart count={cartCount} />}
-      <ShoppingAssistant />
+      {!controlPanel && <ShoppingAssistant />}
       <PageTransition>
       <Routes>
         <Route path="/" element={<HomePage />} />
@@ -96,9 +96,10 @@ function AppRoutes() {
         <Route path="/my-orders/:id" element={<OrderDetailsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/management" element={<AdvancedAdmin />} />
-        <Route path="/admin" element={<AdminPage />} />
-        <Route path="/super-admin" element={<SuperAdminPage />} />
+        <Route path="/management/*" element={<Navigate to="/super-admin/commerce" replace />} />
+        <Route path="/admin/*" element={<Navigate to="/super-admin/dashboard" replace />} />
+        <Route path="/seller" element={<SellerPage />} />
+        <Route path="/super-admin/*" element={<SuperAdminRoutes />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </PageTransition>

@@ -1,13 +1,12 @@
 import { Router } from "express";
 import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
-import { Wallet, WalletEntry, WalletTopup } from "./models.js";
-import { getStoreSettings, auditAdminChanges } from "./superAdmin.js";
-import { requireDatabase } from "./database.js";
-import { requireSuperAdmin } from "./adminPolicy.js";
-import { bad } from "./commercePolicy.js";
-import { validSignature } from "./paymentPolicy.js";
-import { gateway, paymentsConfigured } from "./gateway.js";
+import { Wallet, WalletEntry, WalletTopup } from "../db/models.js";
+import { getStoreSettings } from "../super-admin/routes/superAdminRoutes.js";
+import { requireDatabase } from "../db/connection.js";
+import { bad } from "../commercePolicy.js";
+import { validSignature } from "../paymentPolicy.js";
+import { gateway, paymentsConfigured } from "../gateway.js";
 
 export const validRequestKey = (key) => typeof key === "string" && /^[a-zA-Z0-9_-]{16,80}$/.test(key);
 export function topupMinor(amount) {
@@ -99,10 +98,6 @@ export function createWalletRouter(authenticate) {
       await finalizeTopup(captured);
     }
     res.json({ wallet: await Wallet.findOne({ user: req.user.id }).lean() });
-  }));
-  router.get("/super-admin/wallet", requireDatabase, authenticate, requireSuperAdmin, auditAdminChanges, route(async (req, res) => {
-    const [totals, transactions] = await Promise.all([Wallet.aggregate([{ $group: { _id: null, balanceMinor: { $sum: "$balanceMinor" }, accounts: { $sum: 1 } } }]), WalletEntry.find().sort({ createdAt: -1 }).limit(100).populate("user", "name email").lean()]);
-    res.json({ totals: totals[0] || { balanceMinor: 0, accounts: 0 }, transactions });
   }));
   return router;
 }
