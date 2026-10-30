@@ -36,7 +36,7 @@ export default function SuperAdminWorkspace() {
   const [integrations, setIntegrations] = useState(null);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [sellerDetails, setSellerDetails] = useState({ name: "", email: "", password: "" });
+  const [sellerDetails, setSellerDetails] = useState({ name: "", email: "", password: "", role: "seller" });
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const catalogTab = ["products", "categories", "orders"].includes(tab);
@@ -64,7 +64,11 @@ export default function SuperAdminWorkspace() {
   function selectTab(next) { navigate(sectionPath(next)); }
 
   async function updateUser(account, updates) {
-    const action = "role" in updates ? `change ${account.name}'s role to ${updates.role}` : `${updates.isActive ? "unblock" : "block"} ${account.name}'s account`;
+    const action = "role" in updates
+      ? `change ${account.name}'s role to ${updates.role}`
+      : "permissions" in updates
+        ? `update ${account.name}'s permissions`
+        : `${updates.isActive ? "unblock" : "block"} ${account.name}'s account`;
     if (!window.confirm(`Are you sure you want to ${action}?`)) return;
     setBusy(true); setError(""); setNotice("");
     try {
@@ -79,9 +83,9 @@ export default function SuperAdminWorkspace() {
     event.preventDefault();
     setBusy(true); setError(""); setNotice("");
     try {
-      await superAdminApi.post("sellers", sellerDetails);
-      setSellerDetails({ name: "", email: "", password: "" });
-      setNotice("Seller account created. Share the sign-in details securely.");
+      await superAdminApi.post(sellerDetails.role === "admin" ? "admins" : "sellers", sellerDetails);
+      setSellerDetails({ name: "", email: "", password: "", role: "seller" });
+      setNotice("Account created. Share the sign-in details securely.");
       setRevision((value) => value + 1);
     } catch (requestError) { setError(getErrorMessage(requestError)); }
     finally { setBusy(false); }
@@ -124,4 +128,3 @@ export default function SuperAdminWorkspace() {
         <div className="control-bottom-note"><ShieldCheck size={13} /> Restricted to super administrators <span>{liveSettings.siteName} Control Center</span></div>
   </SuperAdminLayout>;
 }
-

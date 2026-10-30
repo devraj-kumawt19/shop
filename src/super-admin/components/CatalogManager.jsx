@@ -11,10 +11,13 @@ import VariantEditor from "./VariantEditor.jsx";
 
 const orderTotalLabel = (orders) => { const totals = {}; for (const order of orders.filter((item) => !["cancelled", "awaiting_payment"].includes(item.status))) { const currency = order.currency || "USD"; totals[currency] = (totals[currency] || 0) + order.total; } return Object.entries(totals).map(([currency, total]) => formatMoney(total, currency)).join(" / ") || "-"; };
 
-export default function CatalogManager({ embedded = false, initialTab = "products", seller = false, enhanced = false }) {
+export default function CatalogManager({ embedded = false, initialTab = "products", seller = false, enhanced = false, allowedTabs }) {
   const money = useMoney();
   const { user } = useShop();
-  const catalogAccess = can(user, "catalog"), ordersAccess = can(user, "orders") || can(user, "support");
+  const catalogAccess = seller || can(user, "catalog"), ordersAccess = can(user, "orders") || can(user, "support");
+  const catalogBase = seller ? "/seller" : "/admin";
+  const directStock = seller;
+  const visibleTabs = allowedTabs || ["products", "categories", "orders"];
   const [variants, setVariants] = useState([]);
   const AdminContainer = embedded ? "section" : "main";
   const [products, setProducts] = useState([]);
@@ -23,7 +26,7 @@ export default function CatalogManager({ embedded = false, initialTab = "product
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState(can(user, "catalog") ? initialTab : "orders");
+  const [tab, setTab] = useState(visibleTabs.includes(initialTab) ? initialTab : visibleTabs[0]);
   const [formOpen, setFormOpen] = useState(false);
   const [categoryFormOpen, setCategoryFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -40,7 +43,7 @@ export default function CatalogManager({ embedded = false, initialTab = "product
     try {
       const query = enhanced ? `?page=${listPage}&search=${encodeURIComponent(listSearch)}&status=${encodeURIComponent(listFilter)}` : "";
       const [productResult, orderResult, categoryResult] = await Promise.all([
-        catalogAccess && (!enhanced || tab === "products") ? api.get(`/admin/products${query}`, { signal }) : Promise.resolve({ data: { products: [] } }), ordersAccess && (!enhanced || tab === "orders") ? api.get(`/admin/orders${query}`, { signal }) : Promise.resolve({ data: { orders: [] } }), catalogAccess ? api.get("/admin/categories") : Promise.resolve({ data: { categories: [] } }),
+        catalogAccess && (!enhanced || tab === "products") ? api.get(`${catalogBase}/products${query}`, { signal }) : Promise.resolve({ data: { products: [] } }), ordersAccess && (!enhanced || tab === "orders") ? api.get(`${catalogBase}/orders${query}`, { signal }) : Promise.resolve({ data: { orders: [] } }), catalogAccess ? api.get(`${catalogBase}/categories`) : Promise.resolve({ data: { categories: [] } }),
       ]);
       if (signal?.aborted) return;
       setProducts(productResult.data.products);
@@ -55,7 +58,7 @@ export default function CatalogManager({ embedded = false, initialTab = "product
     } catch (requestError) { if (!signal?.aborted) setError(getErrorMessage(requestError)); }
     finally { if (enhanced && !signal?.aborted) setListLoading(false); }
   }
-  useEffect(() => { const controller = new AbortController(); loadDashboard(controller.signal); return () => controller.abort(); }, [user?.id, user?.role, user?.permissions, listPage, listSearch, listFilter]);
+  useEffect(() => { const controller = new AbortController(); loadDashboard(controller.signal); return () => controller.abort(); }, [user?.id, user?.role, user?.permissions, listPage, listSearch, listFilter, tab]);
 
   async function saveProduct(event) {
     event.preventDefault();
@@ -74,10 +77,10 @@ export default function CatalogManager({ embedded = false, initialTab = "product
       category: chosenCategory?.name || form.category,
       categorySlug: form.category,
     };
-    if (editing && !seller) delete payload.stock;
+    if (editing && !directStock) delete payload.stock;
     try {
-      if (editing) await api.patch(`/admin/products/${editing._id}`, payload);
-      else await api.post("/admin/products", payload);
+      if (editing) await api.patch(`${catalogBase}/products/${editing._id}`, payload);
+      else await api.post(`${catalogBase}/products`, payload);
       setNotice(editing ? "Product updated." : "Product added.");
       setEditing(null);
       setFormOpen(false);
@@ -89,7 +92,7 @@ export default function CatalogManager({ embedded = false, initialTab = "product
   async function deleteProduct(product) {
     if (!window.confirm(`Remove ${product.name} from the store?`)) return;
     try {
-      await api.delete(`/admin/products/${product._id}`);
+      await api.delete(`${catalogBase}/products/${product._id}`);
       setNotice("Product removed.");
       await loadDashboard();
     } catch (requestError) { setError(getErrorMessage(requestError)); }
@@ -97,21 +100,21 @@ export default function CatalogManager({ embedded = false, initialTab = "product
 
   async function changeOrderStatus(orderId, status) {
     try {
-      await api.patch(`/admin/orders/${orderId}`, { status });
+      await api.patch(`${catalogBase}/orders/${orderId}`, { status });
       setNotice("Order status updated.");
       await loadDashboard();
     } catch (requestError) { setError(getErrorMessage(requestError)); }
   }
 
-  async function retryEmails(orderId) { setBusy(true); setError(""); try { const { data } = await api.post(`/admin/orders/${orderId}/notifications`); setNotice(data.message); await loadDashboard(); } catch (error) { setError(getErrorMessage(error)); } finally { setBusy(false); } }
+  async function retryEmails(orderId) { setBusy(true); setError(""); try { const { data } = await api.post(`${catalogBase}/orders/${orderId}/notifications`); setNotice(data.message); await loadDashboard(); } catch (error) { setError(getErrorMessage(error)); } finally { setBusy(false); } }
 
   async function saveCategory(event) {
     event.preventDefault();
     setBusy(true);
     const form = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      if (editingCategory) await api.patch(`/admin/categories/${editingCategory._id}`, form);
-      else await api.post("/admin/categories", form);
+      if (editingCategory) await api.patch(`${catalogBase}/categories/${editingCategory._id}`, form);
+      else await api.post(`${catalogBase}/categories`, form);
       setNotice(editingCategory ? "Category updated." : "Category added.");
       setCategoryFormOpen(false);
       setEditingCategory(null);
@@ -126,7 +129,7 @@ export default function CatalogManager({ embedded = false, initialTab = "product
   async function deleteCategory(category) {
     if (!window.confirm(`Remove the ${category.name} category?`)) return;
     try {
-      await api.delete(`/admin/categories/${category._id}`);
+      await api.delete(`${catalogBase}/categories/${category._id}`);
       setNotice("Category removed.");
       await loadDashboard();
     } catch (requestError) {
@@ -145,9 +148,9 @@ export default function CatalogManager({ embedded = false, initialTab = "product
         <div className="admin-stats"><div><span>PRODUCTS</span><b>{products.length}</b></div><div><span>CATEGORIES</span><b>{categoryItems.length}</b></div><div><span>ACTIVE ORDER VALUE</span><b>{orderTotalLabel(orders)}</b></div></div>
         <div className="admin-toolbar">
           <div className="admin-tabs">
-            {catalogAccess && <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>Products</button>}
-            {catalogAccess && !seller && <button className={tab === "categories" ? "active" : ""} onClick={() => setTab("categories")}>Categories</button>}
-            {ordersAccess && <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}>Orders</button>}
+            {catalogAccess && visibleTabs.includes("products") && <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>Products</button>}
+            {catalogAccess && !seller && visibleTabs.includes("categories") && <button className={tab === "categories" ? "active" : ""} onClick={() => setTab("categories")}>Categories</button>}
+            {ordersAccess && visibleTabs.includes("orders") && <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}>Orders</button>}
           </div>
           {tab === "products" && <button className="button button-dark" onClick={() => { setEditing(null); setVariants([]); setFormOpen(!formOpen); }}>+ Add product</button>}
           {tab === "categories" && <button className="button button-dark" onClick={() => { setEditingCategory(null); setCategoryFormOpen(!categoryFormOpen); }}>+ Add category</button>}
@@ -159,10 +162,10 @@ export default function CatalogManager({ embedded = false, initialTab = "product
             <label>Category<select name="category" defaultValue={categoryItems.find((item) => item.name === editing?.category)?.slug || ""} required><option value="" disabled>Choose a category</option>{categoryItems.map((item) => <option value={item.slug} key={item._id}>{item.name}</option>)}</select></label>
             <label>Price<input name="price" type="number" step=".01" min=".01" defaultValue={editing?.price} required /></label>
             <label>Compare at<input name="compareAtPrice" type="number" step=".01" min="0" defaultValue={editing?.compareAtPrice || 0} /></label>
-            <label>Stock<input name="stock" type="number" min="0" defaultValue={editing?.stock || 0} required readOnly={Boolean(editing) && !seller} />{editing && !seller && <small>Adjust stock in <Link to="/super-admin/commerce">Commerce tools / Inventory</Link>.</small>}</label>
+            <label>Stock<input name="stock" type="number" min="0" defaultValue={editing?.stock || 0} required readOnly={Boolean(editing) && !directStock} />{editing && !directStock && <small>Ask the owner to assign inventory permission before changing stock.</small>}</label>
             <label>Badge<input name="badge" defaultValue={editing?.badge} placeholder="BESTSELLER" /></label>
           </div>
-          {(seller || can(user, "inventory")) && <VariantEditor value={variants} onChange={setVariants} existing={editing?.variants || []} allowStockChanges={seller} />}
+          {(seller || can(user, "inventory")) && <VariantEditor value={variants} onChange={setVariants} existing={editing?.variants || []} allowStockChanges={directStock} />}
           <label>Image URL<input name="image" type="url" defaultValue={editing?.image} required /></label>
           <label>Description<textarea name="description" rows="3" defaultValue={editing?.description} required /></label>
           {!seller && <label className="check-field"><input name="featured" type="checkbox" defaultChecked={editing?.featured} /> Show on homepage featured products</label>}
@@ -184,4 +187,3 @@ export default function CatalogManager({ embedded = false, initialTab = "product
     </RequireAuth>
   );
 }
-

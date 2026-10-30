@@ -8,11 +8,11 @@ const userSchema = new Schema({
   name: { type: String, required: true, trim: true, minlength: 2, maxlength: 80 },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true, minlength: 8, select: false },
-  // "admin" is a retired legacy role, retained only so existing accounts remain readable.
+  // Owners manage the website; admins manage sellers/catalog; sellers own their listings.
   role: { type: String, enum: ["customer", "seller", "admin", "superadmin"], default: "customer" },
   isActive: { type: Boolean, default: true },
   authVersion: { type: Number, default: 0 },
-  permissions: { type: [String], enum: ["catalog", "inventory", "orders", "reviews", "reports", "support"], default: undefined },
+  permissions: { type: [String], enum: ["sellers", "customers", "catalog", "inventory", "orders", "reviews", "reports", "support"], default: undefined },
   profileImage: { type: String, default: "", maxlength: 245800 },
 }, { timestamps: true });
 

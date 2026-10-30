@@ -94,7 +94,7 @@ export function createPaymentsRouter(authenticate) {
     let gatewayOrderId = order.gatewayOrderId;
     if (!gatewayOrderId) {
       const lease = new Date();
-      const claimed = await Order.findOneAndUpdate({ _id: order.id, gatewayOrderId: { $exists: false }, $or: [{ paymentCreatingAt: { $exists: false } }, { paymentCreatingAt: { $lt: new Date(Date.now() - 60000) } }] }, { $set: { paymentCreatingAt: lease } }, { new: true });
+      const claimed = await Order.findOneAndUpdate({ _id: order.id, gatewayOrderId: { $exists: false }, $or: [{ paymentCreatingAt: { $exists: false } }, { paymentCreatingAt: { $lt: new Date(Date.now() - 60000) } }] }, { $set: { paymentCreatingAt: lease } }, { returnDocument: "after" });
       if (!claimed) throw fail("A payment session is already being prepared. Please retry shortly.", 409);
       try {
         const created = await gateway("orders", { amount: minorUnits(order.total), currency: order.currency, receipt: order.orderNumber, notes: { storeOrderId: order.id } });

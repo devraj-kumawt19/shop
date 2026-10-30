@@ -16,7 +16,7 @@ async function transaction(fn) { const session = await mongoose.startSession(); 
 export function createCommerceToolsRouter(authenticate, { trackingInput, updateRating }) {
   const router = Router();
   const secure = [requireDatabase, authenticate];
-  const staff = (permissions) => [...secure, (req, res, next) => req.user.role === "seller" ? res.status(403).json({ message: "Seller access is limited to your own product listings." }) : next(), permit(...permissions), auditAdminChanges];
+  const staff = (permissions) => [...secure, (req, res, next) => req.user.role === "superadmin" ? next() : res.status(403).json({ message: "Only the Super Admin can access these store operations." }), permit(...permissions), auditAdminChanges];
   router.put("/admin/shipments/:id", ...staff(["orders", "support"]), route(async (req, res) => {
     const input = trackingInput(req.body || {});
     await transaction(async (session) => {
@@ -31,12 +31,12 @@ export function createCommerceToolsRouter(authenticate, { trackingInput, updateR
   router.post("/admin/coupons", ...staff(["catalog"]), route(async (req, res) => res.status(201).json({ coupon: await Coupon.create(validateCoupon(req.body || {})) })));
   router.patch("/admin/coupons/:id", ...staff(["catalog"]), route(async (req, res) => {
     if (typeof req.body.active !== "boolean" || Object.keys(req.body).length !== 1) throw bad("Only coupon activation can be changed. Create a new code to change its terms.");
-    const coupon = await Coupon.findByIdAndUpdate(id(req.params.id), { $set: { active: req.body.active } }, { new: true }); if (!coupon) throw bad("Coupon not found.", 404); res.json({ coupon });
+    const coupon = await Coupon.findByIdAndUpdate(id(req.params.id), { $set: { active: req.body.active } }, { returnDocument: "after" }); if (!coupon) throw bad("Coupon not found.", 404); res.json({ coupon });
   }));
   router.get("/admin/reviews", ...staff(["reviews"]), route(async (req, res) => res.json({ reviews: await Review.find().sort({ createdAt: -1 }).limit(100).populate("product", "name").populate("user", "name").lean() })));
   router.patch("/admin/reviews/:id", ...staff(["reviews"]), route(async (req, res) => {
     if (typeof req.body.published !== "boolean") throw bad("Choose whether to publish the review.");
-    await transaction(async (session) => { const review = await Review.findByIdAndUpdate(id(req.params.id), { $set: { published: req.body.published } }, { session, new: true }); if (!review) throw bad("Review not found.", 404); await updateRating(review.product, session); }); res.json({ saved: true });
+    await transaction(async (session) => { const review = await Review.findByIdAndUpdate(id(req.params.id), { $set: { published: req.body.published } }, { session, returnDocument: "after" }); if (!review) throw bad("Review not found.", 404); await updateRating(review.product, session); }); res.json({ saved: true });
   }));
   router.get("/admin/inventory", ...staff(["inventory"]), route(async (req, res) => {
     const settings = await getStoreSettings();

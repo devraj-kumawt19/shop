@@ -27,30 +27,37 @@ function isHttpUrl(value) {
   }
 }
 
+const isSellerWorkspace = (user) => ["seller", "admin"].includes(user.role);
+
 export function createCatalogRouter(authenticate) {
   const router = Router();
   router.use(requireDatabase, authenticate, (req, res, next) => {
-    if (req.user.role === "seller") {
+    if (isSellerWorkspace(req.user)) {
+      if (req.user.role === "admin" && req.baseUrl !== "/api/seller") return res.status(403).json({ message: "Use the seller workspace to manage your own products." });
       const scope = req.path.split("/")[1];
       if (scope === "products" || scope === "categories" && req.method === "GET") return next();
       return res.status(403).json({ message: "Seller access is limited to your own products and product categories." });
     }
     return requireOwner(req, res, next);
   }, (req, res, next) => {
-    if (req.user.role === "seller") return next();
+    if (isSellerWorkspace(req.user)) return next();
     const scope = req.path.split("/")[1];
     const permissions = scope === "orders" ? (req.method === "GET" ? ["orders", "support"] : ["orders"]) : ["catalog"];
     return permit(...permissions)(req, res, next);
   }, auditAdminChanges);
   router.get("/products", asyncRoute(async (req, res) => {
-    const filter = req.user.role === "seller" ? { seller: req.user.id } : {};
+    const filter = isSellerWorkspace(req.user) ? { seller: req.user.id } : {};
     if (req.query.page !== undefined) {
       const { page, limit, filter: searchFilter } = adminListQuery(req.query, "products");
       const combined = { ...searchFilter, ...filter };
-      const [products, total] = await Promise.all([Product.find(combined).populate("seller", "name email").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), Product.countDocuments(combined)]);
+      const productQuery = Product.find(combined);
+      if (can(req.user, "sellers")) productQuery.populate("seller", "name email");
+      const [products, total] = await Promise.all([productQuery.sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), Product.countDocuments(combined)]);
       return res.json({ products, total, page, pages: Math.ceil(total / limit) });
     }
-    const products = await Product.find(filter).populate("seller", "name email").sort({ createdAt: -1 }).lean();
+    const productQuery = Product.find(filter);
+    if (can(req.user, "sellers")) productQuery.populate("seller", "name email");
+    const products = await productQuery.sort({ createdAt: -1 }).lean();
     return res.json({ products });
   }));
   router.post("/products", asyncRoute(async (req, res) => {
@@ -62,19 +69,20 @@ export function createCatalogRouter(authenticate) {
     const slug = String(req.body.categorySlug || category).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     if (!await Category.exists({ slug })) return res.status(400).json({ message: "Choose an existing product category." });
     const variants = normalizeVariants(req.body.variants || []);
-    if (!can(req.user, "inventory") && req.user.role !== "seller" && (stock > 0 || variants.length)) return res.status(403).json({ message: "Inventory permission is required to set initial stock or product options." });
+    if (!can(req.user, "inventory") && !isSellerWorkspace(req.user) && (stock > 0 || variants.length)) return res.status(403).json({ message: "Inventory permission is required to set initial stock or product options." });
     const session = await mongoose.startSession(); let product;
     try { await session.withTransaction(async () => {
-    [product] = await Product.create([{ name: name.trim(), description, image, badge, category: category.trim(), categorySlug: slug, price: variants.length ? Math.min(...variants.map((v) => v.price)) : price, compareAtPrice: Number(compareAtPrice) || 0, stock: variants.length ? variants.reduce((sum, v) => sum + v.stock, 0) : stock, variants, featured: req.user.role === "seller" ? false : Boolean(req.body.featured), isDemo: req.user.role === "seller" ? false : Boolean(req.body.isDemo), quickEligible: req.user.role === "seller" ? false : Boolean(req.body.quickEligible), ...(req.user.role === "seller" ? { seller: req.user.id, isPublished: true } : {}) }], { session });
+    [product] = await Product.create([{ name: name.trim(), description, image, badge, category: category.trim(), categorySlug: slug, price: variants.length ? Math.min(...variants.map((v) => v.price)) : price, compareAtPrice: Number(compareAtPrice) || 0, stock: variants.length ? variants.reduce((sum, v) => sum + v.stock, 0) : stock, variants, featured: isSellerWorkspace(req.user) ? false : Boolean(req.body.featured), isDemo: isSellerWorkspace(req.user) ? false : Boolean(req.body.isDemo), quickEligible: isSellerWorkspace(req.user) ? false : Boolean(req.body.quickEligible), ...(isSellerWorkspace(req.user) ? { seller: req.user.id, isPublished: true } : {}) }], { session });
     const initial = variants.length ? variants.filter((v) => v.stock > 0).map((v) => ({ product: product.id, variantSku: v.sku, delta: v.stock, reason: "Initial inventory", actor: req.user.id })) : stock > 0 ? [{ product: product.id, delta: stock, reason: "Initial inventory", actor: req.user.id }] : [];
     if (initial.length) await StockMovement.create(initial, { session, ordered: true });
     }); } finally { await session.endSession(); }
     return res.status(201).json({ product });
   }));
   router.patch("/products/:id", asyncRoute(async (req, res) => {
+    const directStock = isSellerWorkspace(req.user) || can(req.user, "inventory");
     const allowed = ["name", "category", "categorySlug", "description", "image", "price", "compareAtPrice", "stock", "badge", "featured", "isDemo", "variants", "quickEligible"];
     const sellerFields = ["name", "category", "categorySlug", "description", "image", "price", "compareAtPrice", "stock", "badge", "variants"];
-    const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => (req.user.role === "seller" ? sellerFields : allowed).includes(key)));
+    const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => (isSellerWorkspace(req.user) ? sellerFields : allowed).includes(key)));
     for (const key of ["price", "compareAtPrice", "stock"]) if (key in updates && (!Number.isFinite(updates[key]) || updates[key] < 0 || (key === "stock" ? !Number.isInteger(updates[key]) : roundMoney(updates[key]) !== updates[key]) || key === "price" && updates[key] === 0)) return res.status(400).json({ message: "Use a positive price, non-negative compare-at price and whole stock quantities." });
     if (updates.category && !updates.categorySlug) updates.categorySlug = updates.category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     if (updates.categorySlug && !await Category.exists({ slug: updates.categorySlug })) return res.status(400).json({ message: "Choose an existing product category." });
@@ -82,33 +90,33 @@ export function createCatalogRouter(authenticate) {
       const image = new URL(updates.image);
       if (!["http:", "https:"].includes(image.protocol)) return res.status(400).json({ message: "Image URL must use HTTP or HTTPS." });
     }
-    const before = await Product.findOne({ _id: req.params.id, ...(req.user.role === "seller" ? { seller: req.user.id } : {}) }).lean();
+    const before = await Product.findOne({ _id: req.params.id, ...(isSellerWorkspace(req.user) ? { seller: req.user.id } : {}) }).lean();
     if (!before) return res.status(404).json({ message: "We couldn't find that product." });
-    if (("stock" in updates || "variants" in updates) && !can(req.user, "inventory") && req.user.role !== "seller") return res.status(403).json({ message: "Inventory permission is required to edit stock or variants." });
+    if (("stock" in updates || "variants" in updates) && !can(req.user, "inventory") && !isSellerWorkspace(req.user)) return res.status(403).json({ message: "Inventory permission is required to edit stock or variants." });
     // Stock edits use the inventory ledger, avoiding races with checkout.
-    if ("stock" in updates && updates.stock !== before.stock && req.user.role !== "seller") return res.status(409).json({ message: "Change stock in Commerce tools > Inventory to record an adjustment." });
+    if ("stock" in updates && updates.stock !== before.stock && !directStock) return res.status(409).json({ message: "Change stock in Commerce tools > Inventory to record an adjustment." });
     if ("variants" in updates) {
       updates.variants = normalizeVariants(updates.variants);
       for (const old of before.variants || []) {
         const next = updates.variants.find((v) => v.sku === old.sku);
         if (!next) return res.status(409).json({ message: "Existing SKUs cannot be removed. Set their stock to zero instead." });
-        if (req.user.role !== "seller" && next.stock !== old.stock) return res.status(409).json({ message: "Keep existing SKUs and stock unchanged. Use Inventory to change stock." });
+        if (!directStock && next.stock !== old.stock) return res.status(409).json({ message: "Keep existing SKUs and stock unchanged. Use Inventory to change stock." });
       }
-      if (req.user.role !== "seller" && (before.variants?.length || before.stock > 0) && updates.variants.some((v) => !before.variants?.some((old) => old.sku === v.sku) && v.stock > 0)) return res.status(409).json({ message: "New options must start with zero stock. Restock in Inventory after saving." });
-      if (!before.variants?.length && before.stock !== 0 && req.user.role !== "seller") return res.status(409).json({ message: "Set stock to zero through Inventory before adding variants." });
+      if (!directStock && (before.variants?.length || before.stock > 0) && updates.variants.some((v) => !before.variants?.some((old) => old.sku === v.sku) && v.stock > 0)) return res.status(409).json({ message: "New options must start with zero stock. Restock in Inventory after saving." });
+      if (!before.variants?.length && before.stock !== 0 && !directStock) return res.status(409).json({ message: "Set stock to zero through Inventory before adding variants." });
       if (updates.variants.length) { updates.stock = updates.variants.reduce((sum, v) => sum + v.stock, 0); updates.price = Math.min(...updates.variants.map((v) => v.price)); }
     }
     const session = await mongoose.startSession(); let product;
     try { await session.withTransaction(async () => {
-      product = await Product.findOneAndUpdate({ _id: before._id, updatedAt: before.updatedAt, ...(req.user.role === "seller" ? { seller: req.user.id } : {}) }, updates, { session, new: true, runValidators: true });
+      product = await Product.findOneAndUpdate({ _id: before._id, updatedAt: before.updatedAt, ...(isSellerWorkspace(req.user) ? { seller: req.user.id } : {}) }, updates, { session, returnDocument: "after", runValidators: true });
       if (!product) throw Object.assign(new Error("Product changed. Refresh before editing."), { status: 409 });
-      if (req.user.role === "seller" && "variants" in updates && updates.variants.length) {
+      if (directStock && "variants" in updates && updates.variants.length) {
         const movements = updates.variants.map((variant) => {
           const previous = before.variants?.find((item) => item.sku === variant.sku);
           return { product: product.id, variantSku: variant.sku, delta: variant.stock - (previous?.stock || 0), reason: "Seller inventory adjustment", actor: req.user.id };
         }).filter((movement) => movement.delta !== 0);
         if (movements.length) await StockMovement.create(movements, { session, ordered: true });
-      } else if (req.user.role === "seller" && "stock" in updates && updates.stock !== before.stock) {
+      } else if (directStock && "stock" in updates && updates.stock !== before.stock) {
         await StockMovement.create([{ product: product.id, delta: updates.stock - before.stock, reason: "Seller inventory adjustment", actor: req.user.id }], { session });
       }
       await notifyProductChange(before, product, await getStoreSettings(), session);
@@ -118,7 +126,7 @@ export function createCatalogRouter(authenticate) {
   router.delete("/products/:id", asyncRoute(async (req, res) => {
     const session = await mongoose.startSession();
     try { await session.withTransaction(async () => {
-      const filter = { _id: req.params.id, ...(req.user.role === "seller" ? { seller: req.user.id } : {}) };
+      const filter = { _id: req.params.id, ...(isSellerWorkspace(req.user) ? { seller: req.user.id } : {}) };
       if (!await Product.exists(filter).session(session)) throw Object.assign(new Error("We couldn't find that product."), { status: 404 });
       if (await Order.exists({ "items.product": req.params.id, status: { $in: ["awaiting_payment", "placed", "processing", "shipped"] } }).session(session)) throw Object.assign(new Error("This product is in an active order. Resolve the order before deleting it."), { status: 409 });
       const product = await Product.findOneAndDelete(filter, { session });
@@ -207,6 +215,7 @@ export function createCatalogRouter(authenticate) {
     res.json({ message: "Unsent order emails have been queued for retry. Sent emails will not be duplicated." });
   }));
   router.patch("/orders/:id", asyncRoute(async (req, res) => {
+    const directStock = ["seller", "admin"].includes(req.user.role);
     const allowed = ["placed", "processing", "shipped", "delivered", "cancelled"];
     if (!allowed.includes(req.body.status)) return res.status(400).json({ message: "Choose a valid order status." });
     const session = await mongoose.startSession();

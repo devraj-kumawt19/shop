@@ -23,6 +23,7 @@ import { isValidProfileImage } from "./profileImage.js";
 import { createCatalogRouter } from "./super-admin/routes/catalogRoutes.js";
 import { walletAdminRouter } from "./super-admin/routes/walletAdminRoutes.js";
 import { acceptInvitation } from "./super-admin/services/superAdminAuth.js";
+import { createSellerRouter } from "./seller/routes/sellerRoutes.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -108,13 +109,14 @@ app.get("/api/delivery/check", requireDatabase, asyncRoute(async (req, res) => r
 app.use(seoRouter);
 
 app.post("/api/auth/register", requireDatabase, asyncRoute(async (req, res) => {
-  const { name, email, password } = req.body || {};
+  const { name, email, password, role = "customer" } = req.body || {};
+  if (!["customer", "seller"].includes(role)) return res.status(400).json({ message: "Choose a customer or seller account. Staff accounts are created by the owner." });
   if (typeof name !== "string" || name.trim().length < 2 || name.trim().length > 80) return res.status(400).json({ message: "Enter a name between 2 and 80 characters." });
-  if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: "Enter a valid email address." });
+  if (typeof email !== "string" || email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return res.status(400).json({ message: "Enter a valid email address." });
   if (typeof password !== "string" || password.length < 8 || password.length > 128) return res.status(400).json({ message: "Password must be between 8 and 128 characters." });
   const normalizedEmail = email.trim().toLowerCase();
   if (await User.exists({ email: normalizedEmail })) return res.status(409).json({ message: "An account with this email already exists." });
-  const user = await User.create({ name: name.trim(), email: normalizedEmail, password });
+  const user = await User.create({ name: name.trim(), email: normalizedEmail, password, role, permissions: [] });
   return res.status(201).json({ user: publicUser(user), token: signToken(user) });
 }));
 
@@ -139,6 +141,12 @@ app.post("/api/auth/logout", requireDatabase, authenticate, asyncRoute(async (re
 }));
 
 app.get("/api/auth/me", requireDatabase, authenticate, (req, res) => res.json({ user: publicUser(req.user) }));
+app.post("/api/auth/become-seller", requireDatabase, authenticate, asyncRoute(async (req, res) => {
+  if (req.user.role !== "customer") return res.status(403).json({ message: "Only customer accounts can register as sellers here." });
+  const user = await User.findOneAndUpdate({ _id: req.user.id, role: "customer", isActive: { $ne: false } }, { $set: { role: "seller", permissions: [] }, $inc: { authVersion: 1 } }, { returnDocument: "after", runValidators: true });
+  if (!user) return res.status(409).json({ message: "Your account changed. Sign in and try again." });
+  return res.json({ user: publicUser(user), token: signToken(user) });
+}));
 app.patch("/api/auth/profile", requireDatabase, authenticate, asyncRoute(async (req, res) => {
   const { name, email, profileImage } = req.body || {};
   if (typeof name !== "string" || name.trim().length < 2 || name.trim().length > 80) return res.status(400).json({ message: "Enter a name between 2 and 80 characters." });
@@ -262,6 +270,8 @@ app.get("/api/orders/:id", requireDatabase, authenticate, asyncRoute(async (req,
 
 app.use("/api/super-admin/wallet", requireDatabase, authenticate, requireSuperAdmin, walletAdminRouter);
 app.use("/api/super-admin", requireDatabase, authenticate, requireSuperAdmin, auditAdminChanges, superAdminRouter);
+app.use("/api/seller", createSellerRouter(authenticate));
+app.use("/api/seller", createCatalogRouter(authenticate));
 app.use("/api/admin", createCatalogRouter(authenticate));
 
 app.use((req, res) => res.status(404).json({ message: "That API route was not found." }));

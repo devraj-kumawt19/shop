@@ -87,7 +87,7 @@ export function SiteFooter() {
           <p>{settings.footerDescription}</p>
         </div>
         <div className="footer-column"><span className="footer-title">EXPLORE</span><Link to="/products">Shop all</Link>{categories.slice(0, 4).map((category) => <Link key={category.slug} to={`/categories/${category.slug}`}>{category.name}</Link>)}</div>
-        <div className="footer-column"><span className="footer-title">HERE TO HELP</span><Link to="/profile">Your account</Link><Link to="/wallet">Shop Wallet</Link><Link to="/my-orders">Order history</Link><Link to="/quick-delivery">15-minute delivery</Link><a href={`mailto:${settings.supportEmail}`}>Get in touch</a></div>
+        <div className="footer-column"><span className="footer-title">HERE TO HELP</span><Link to="/profile">Your account</Link><Link to="/sell">Become a seller</Link><Link to="/wallet">Shop Wallet</Link><Link to="/my-orders">Order history</Link><Link to="/quick-delivery">15-minute delivery</Link><a href={`mailto:${settings.supportEmail}`}>Get in touch</a></div>
         <div className="newsletter"><span className="footer-title">A LITTLE HELP, WHEN YOU NEED IT</span><p>Questions about an order or looking for a recommendation? We’re here.</p><a className="footer-contact" href={`mailto:${settings.supportEmail}`}>{settings.supportEmail} <ArrowRight size={15} /></a><small>Real people, here to help you find the right thing.</small></div>
       </div>
       <div className="footer-bottom"><span>© 2026 {settings.siteName}. Thoughtfully found.</span><span>A little more joy in the everyday.</span><div><span>Privacy</span><span>Terms</span><span>Instagram</span></div></div>

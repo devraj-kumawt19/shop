@@ -75,7 +75,7 @@ export function createCommerceRouter(authenticate) {
     if (!order) throw bad("Reviews are available after your purchase has been delivered.", 403);
     let review;
     await transaction(async (session) => {
-      review = await Review.findOneAndUpdate({ product, user: req.user.id }, { $set: { ...input, order: order._id, published: true } }, { session, upsert: true, new: true, runValidators: true });
+      review = await Review.findOneAndUpdate({ product, user: req.user.id }, { $set: { ...input, order: order._id, published: true } }, { session, upsert: true, returnDocument: "after", runValidators: true });
       await updateRating(product, session);
     });
     res.json({ review });
@@ -102,7 +102,7 @@ export function createCommerceRouter(authenticate) {
     const { type, targetPrice } = req.body;
     if (!["stock", "price"].includes(type) || (type === "price" && (!Number.isFinite(targetPrice) || targetPrice <= 0 || targetPrice >= product.price))) throw bad("Choose a stock alert or a target price below the current price.");
     if (type === "stock" && product.stock > 0) throw bad("This product is already in stock.");
-    const alert = await ProductAlert.findOneAndUpdate({ user: req.user.id, product: product._id, type }, { $set: { active: true, targetPrice: type === "price" ? targetPrice : undefined, currency: (await getStoreSettings()).currency } }, { upsert: true, new: true, runValidators: true }); res.json({ alert });
+    const alert = await ProductAlert.findOneAndUpdate({ user: req.user.id, product: product._id, type }, { $set: { active: true, targetPrice: type === "price" ? targetPrice : undefined, currency: (await getStoreSettings()).currency } }, { upsert: true, returnDocument: "after", runValidators: true }); res.json({ alert });
   }));
   router.delete("/alerts/:id", ...secure, route(async (req, res) => { await ProductAlert.deleteOne({ _id: id(req.params.id), user: req.user.id }); res.json({ removed: true }); }));
   router.get("/orders/:id/invoice", ...secure, route(async (req, res) => {

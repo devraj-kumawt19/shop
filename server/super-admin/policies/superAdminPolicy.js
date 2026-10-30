@@ -1,4 +1,5 @@
 import { defaultStoreSettings } from "../../storeSettings.js";
+import { adminPermissionOptions } from "../permissions.js";
 
 export function requireSuperAdmin(req, res, next) {
   if (req.user?.role !== "superadmin") return res.status(403).json({ message: "Super admin access is required." });
@@ -30,9 +31,19 @@ export function adminListQuery(query, kind) {
 export function validateUserUpdate(actor, target, input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return "Enter valid account updates.";
   if (actor.id === target.id || target.role === "superadmin") return "Super admin accounts cannot be changed here.";
+  if (!["superadmin", "admin"].includes(actor.role)) return "Administrator access is required.";
+  if (actor.role === "admin" && !["customer", "seller"].includes(target.role)) return "Only the owner can manage administrator accounts.";
   const keys = Object.keys(input);
-  if (!keys.length || keys.some((key) => !["role", "isActive"].includes(key))) return "Only account role and status can be updated.";
-  if ("role" in input && !["customer", "seller"].includes(input.role)) return "Choose customer or seller. Super Admins require a secure invitation or server provisioning.";
+  if (!keys.length || keys.some((key) => !["role", "isActive", "permissions"].includes(key))) return "Only account role, status and permissions can be updated.";
+  if ("permissions" in input) {
+    if (actor.role !== "superadmin") return "Only the owner can assign administrator permissions.";
+    if (target.role !== "admin" && input.role !== "admin") return "Permissions can only be assigned to administrator accounts.";
+    const allowed = new Set(adminPermissionOptions.map(({ value }) => value));
+    if (!Array.isArray(input.permissions) || new Set(input.permissions).size !== input.permissions.length || input.permissions.some((permission) => !allowed.has(permission))) return "Choose valid, unique administrator permissions.";
+  }
+  const roles = actor.role === "superadmin" ? ["customer", "seller", "admin"] : ["customer", "seller"];
+  if ("role" in input && !roles.includes(input.role)) return "Choose an allowed account role. Only the owner can assign admin access; Super Admins require a secure invitation.";
+  if ("permissions" in input && input.role && input.role !== "admin") return "Only administrator accounts can receive permissions.";
   if ("isActive" in input && typeof input.isActive !== "boolean") return "Account status must be true or false.";
   return "";
 }

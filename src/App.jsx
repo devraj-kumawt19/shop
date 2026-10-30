@@ -1,5 +1,6 @@
 import { NotificationsPage, ShoppingAssistant } from "./CommerceWidgets.jsx";
 import SellerPage from "./seller/SellerPage.jsx";
+import SellerOnboarding from "./seller/SellerOnboarding.jsx";
 import WalletPage from "./WalletPage.jsx";
 import DealsPage from "./DealsPage.jsx";
 import QuickDeliveryPage from "./QuickDeliveryPage.jsx";
@@ -64,8 +65,8 @@ function FloatingCart({ count }) {
 
 function AppRoutes() {
   const pathname = useLocation().pathname;
-  const controlPanel = pathname === "/super-admin" || pathname.startsWith("/super-admin/");
-  const authPage = pathname === "/login" || pathname === "/register";
+  const controlPanel = pathname === "/seller" || pathname === "/super-admin" || pathname.startsWith("/super-admin/") || pathname === "/admin" || pathname.startsWith("/admin/");
+  const authPage = pathname === "/login" || pathname === "/register" || pathname === "/seller/register";
   const { cart, settingsError } = useShop();
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const showFloatingCart = cartCount > 0 && pathname !== "/cart" && !controlPanel && !authPage;
@@ -90,14 +91,16 @@ function AppRoutes() {
         <Route path="/sale" element={<DealsPage />} />
         <Route path="/quick-delivery" element={<QuickDeliveryPage />} />
         <Route path="/login" element={<AuthPage mode="login" />} />
-        <Route path="/register" element={<AuthPage mode="register" />} />
+        <Route path="/register" element={<AuthPage key="register" mode="register" />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/my-orders" element={<OrdersPage />} />
         <Route path="/my-orders/:id" element={<OrderDetailsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/management/*" element={<Navigate to="/super-admin/commerce" replace />} />
-        <Route path="/admin/*" element={<Navigate to="/super-admin/dashboard" replace />} />
+        <Route path="/admin/*" element={<Navigate to="/seller" replace />} />
+        <Route path="/sell" element={<SellerOnboarding />} />
+        <Route path="/seller/register" element={<AuthPage key="seller-register" mode="register" seller />} />
         <Route path="/seller" element={<SellerPage />} />
         <Route path="/super-admin/*" element={<SuperAdminRoutes />} />
         <Route path="*" element={<NotFoundPage />} />

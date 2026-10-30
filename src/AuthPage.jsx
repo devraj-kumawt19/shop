@@ -7,12 +7,13 @@ import { StatusMessage } from "./components.jsx";
 import { authDestination, validateAuth } from "./authValidation.js";
 import "./auth.css";
 
-export default function AuthPage({ mode }) {
+export default function AuthPage({ mode, seller = false }) {
   const { signIn, settings } = useShop();
   const navigate = useNavigate();
   const location = useLocation();
   const formRef = useRef(null);
   const isRegister = mode === "register";
+  const [accountRole, setAccountRole] = useState(seller ? "seller" : "customer");
   const [values, setValues] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState("");
@@ -49,7 +50,7 @@ export default function AuthPage({ mode }) {
     }
     setLoading(true);
     try {
-      const payload = { email: values.email.trim(), password: values.password, ...(isRegister ? { name: values.name.trim() } : {}) };
+      const payload = { email: values.email.trim(), password: values.password, ...(isRegister ? { name: values.name.trim(), role: accountRole } : {}) };
       const account = await signIn(payload, mode);
       navigate(authDestination(account.role, location.state?.from), { replace: true });
     } catch (error) { setServerError(getErrorMessage(error)); }
@@ -89,6 +90,7 @@ export default function AuthPage({ mode }) {
           <div className="access-form-heading"><span className="access-heading-icon">{isRegister ? <UserRound size={20} /> : <LockKeyhole size={20} />}</span><span className="access-form-kicker">{isRegister ? "YOUR OWN LITTLE CORNER" : "YOUR ACCOUNT"}</span><h1 id="access-title">{isRegister ? "Create your account." : "Welcome back."}</h1><p>{isRegister ? "A few details, and you're part of the good things." : "Sign in to your orders, favorites and everyday finds."}</p></div>
           {serverError && <StatusMessage tone="error">{serverError}</StatusMessage>}
           <form ref={formRef} className="access-form" onSubmit={submit} noValidate aria-busy={loading}><fieldset disabled={loading}>
+            {isRegister && <div className="access-field"><label htmlFor="account-role">Account type</label><select id="account-role" value={accountRole} onChange={(event) => setAccountRole(event.target.value)}><option value="customer">Customer — shop and track orders</option><option value="seller">Seller — list and sell your products</option></select><p className="access-password-hint">{accountRole === "seller" ? "Create your seller ID and start listing products from your seller dashboard." : "Choose Seller if you want to sell products."}</p></div>}
             {isRegister && input("name", { label: "Full name", placeholder: "Your full name", Icon: UserRound, autoComplete: "name", maxLength: 80 })}
             {input("email", { label: "Email address", placeholder: "you@example.com", Icon: Mail, type: "email", autoComplete: "email", maxLength: 254 })}
             {input("password", { label: "Password", placeholder: isRegister ? "Create a password" : "Enter your password", Icon: LockKeyhole, autoComplete: isRegister ? "new-password" : "current-password" })}
@@ -97,6 +99,7 @@ export default function AuthPage({ mode }) {
             <button className="button button-dark access-submit" disabled={loading}>{loading ? <><LoaderCircle size={17} className="access-spinner" />{isRegister ? "Creating your account..." : "Signing you in..."}</> : <>{isRegister ? "Create account" : "Sign in"}<ArrowRight size={17} /></>}</button>
           </fieldset></form>
           <p className="access-account-note">{isRegister ? "Already have an account?" : "New here?"} <Link to={isRegister ? "/login" : "/register"} state={location.state}>{isRegister ? "Sign in" : "Create an account"}</Link></p>
+          <p className="access-account-note"><Link to="/sell">Want to sell your products? Become a seller</Link></p>
           <div className="access-guest"><span>Just looking around?</span><Link to="/products">Explore the shop <ArrowUpRight size={14} /></Link></div>
           <p className="access-security"><ShieldCheck size={14} />Your account. Your orders. Your favorites.</p>
         </div>

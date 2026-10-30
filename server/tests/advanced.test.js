@@ -17,7 +17,7 @@ process.env.JWT_SECRET = "advanced-test-only-authentication-secret-32-chars";
 const { app } = await import("../app.js");
 const ids = { user: "aaaaaaaaaaaaaaaaaaaaaaaa", other: "bbbbbbbbbbbbbbbbbbbbbbbb", product: "cccccccccccccccccccccccc", order: "dddddddddddddddddddddddd", coupon: "eeeeeeeeeeeeeeeeeeeeeeee" };
 const query = (value) => ({ session() { return this; }, select() { return this; }, populate() { return this; }, sort() { return this; }, skip() { return this; }, limit() { return this; }, lean: async () => value, then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); } });
-let server, base, user, settings, products, productFilter, coupon, writes, foundOrder, review, inboxFilter, orderFilter, expiry;
+let server, base, user, settings, products, productFilter, productCountFilters, coupon, writes, foundOrder, review, inboxFilter, orderFilter, expiry;
 const stockOptions = () => [{ sku: "TEE-M-BLUE", size: "M", color: "Blue", price: 45.5, stock: 3 }, { sku: "TEE-L-BLUE", size: "L", color: "Blue", price: 48, stock: 7 }];
 const sampleOrder = () => ({ id: ids.order, _id: ids.order, orderNumber: "SS-TEST-INVOICE", user: ids.user, items: [{ product: ids.product, name: "Everyday cotton tee", image: "https://example.test/tee.jpg", price: 45.5, quantity: 2, variantSku: "TEE-M-BLUE", variantLabel: "M / Blue" }], subtotal: 91, discount: 9.1, couponCode: "SAVE10", shipping: 0, total: 81.9, currency: "INR", status: "delivered", paymentMethod: "cash_on_delivery", paymentStatus: "pending", createdAt: new Date(), timeline: [], shippingAddress: { firstName: "Test", lastName: "Buyer", email: "test@example.test", street: "123 Example Lane", city: "Delhi", state: "Delhi", postalCode: "110001", phone: "1234567890" }, save: async () => {} });
 async function request(path, { method = "GET", body, anonymous = false } = {}) {
@@ -30,6 +30,13 @@ before(async () => {
   mock.method(User, "findById", async () => user);
   mock.method(StoreSettings, "findById", () => query(settings));
   mock.method(Product, "find", (filter) => { productFilter = filter; return query(products.filter((product) => filter?.isPublished?.$ne !== false || product.isPublished !== false)); });
+  mock.method(Product, "countDocuments", async (filter = {}) => {
+    productCountFilters.push(filter);
+    return products.filter((product) => (!filter.seller || product.seller === filter.seller)
+      && (filter.stock?.$gt === undefined || product.stock > filter.stock.$gt)
+      && (filter.stock?.$lte === undefined || product.stock <= filter.stock.$lte)
+      && (filter.stock !== 0 || product.stock === 0)).length;
+  });
   mock.method(Product, "findOne", (filter) => query(products.find((product) => String(product._id) === String(filter._id) && (!filter.seller || product.seller === filter.seller)) || null));
   mock.method(Category, "exists", async ({ slug }) => slug === "home");
   mock.method(Product, "create", async ([input]) => {
@@ -70,7 +77,7 @@ before(async () => {
   await new Promise((resolve) => { server = app.listen(0, "127.0.0.1", resolve); }); base = `http://127.0.0.1:${server.address().port}`;
 });
 beforeEach(() => {
-  user = { id: ids.user, role: "customer", isActive: true }; settings = { ...defaultStoreSettings, currency: "INR" }; products = [{ _id: ids.product, name: "Everyday cotton tee", image: "https://example.test/tee.jpg", price: 45.5, stock: 10, variants: stockOptions(), description: "A soft everyday cotton tee." }]; productFilter = null; coupon = { id: ids.coupon, _id: ids.coupon, code: "SAVE10", type: "percent", amount: 10, minimum: 0, maximumDiscount: 0, maxUses: 10, uses: 0, active: true, currency: "INR" }; writes = []; foundOrder = null; review = {}; expiry = [];
+  user = { id: ids.user, role: "customer", isActive: true }; settings = { ...defaultStoreSettings, currency: "INR" }; products = [{ _id: ids.product, name: "Everyday cotton tee", image: "https://example.test/tee.jpg", price: 45.5, stock: 10, variants: stockOptions(), description: "A soft everyday cotton tee." }]; productFilter = null; productCountFilters = []; coupon = { id: ids.coupon, _id: ids.coupon, code: "SAVE10", type: "percent", amount: 10, minimum: 0, maximumDiscount: 0, maxUses: 10, uses: 0, active: true, currency: "INR" }; writes = []; foundOrder = null; review = {}; expiry = [];
 });
 after(async () => { await new Promise((resolve) => server.close(resolve)); mock.restoreAll(); mongoose.connection.readyState = 0; });
 
@@ -116,34 +123,53 @@ test("CSV parsing preserves quoted reasons and rejects malformed, wrong-header a
   for (const invalid of ["wrong,header\na,b", 'productId,variantSku,stock,reason\nx,y,2,"unclosed', "x".repeat(100001), "productId,variantSku,stock,reason\na,b,2"]) assert.throws(() => parseCsv(invalid));
   assert.equal(csvCell("=SUM(A1)"), '"\'=SUM(A1)"'); assert.equal(csvCell('a"b'), '"a""b"');
 });
-test("management APIs allow only Super Admins and reject retired admin roles even with claimed permissions", async () => {
-  const paths = ["/admin/inventory", "/admin/coupons", "/admin/reports", "/admin/reviews", "/admin/products", "/admin/orders"];
-  for (const path of paths) assert.equal((await request(path)).status, 403);
+test("legacy admin accounts only have seller product access and cannot use staff operations", async () => {
   user.role = "admin"; user.permissions = ["inventory", "catalog", "orders", "support"];
-  for (const path of paths) assert.equal((await request(path)).status, 403);
+  assert.equal((await request("/seller/products")).status, 200);
+  assert.deepEqual(productFilter, { seller: ids.user });
+  assert.deepEqual((await request("/seller/dashboard")).body.summary, { products: 0, lowStock: 0, outOfStock: 0 });
+  assert.equal((await request("/admin/dashboard")).status, 403);
+  for (const path of ["/admin/products", "/admin/inventory", "/admin/orders", "/admin/reports", "/admin/reviews"]) {
+    assert.equal((await request(path)).status, 403, path);
+  }
+  assert.equal((await request("/admin/accounts/users")).status, 403);
   assert.equal(can({ role: "admin" }, "catalog"), false);
-  assert.equal(can({ role: "admin", permissions: ["inventory"] }, "inventory"), false);
+  assert.equal(can({ role: "admin" }, "inventory"), false);
+  assert.equal(can({ role: "admin", permissions: ["inventory"] }, "inventory"), true);
   assert.equal(can({ role: "customer", permissions: ["inventory"] }, "inventory"), false);
   user.role = "superadmin";
   assert.equal((await request("/admin/inventory")).status, 200);
   assert.equal(can({ role: "superadmin", permissions: [] }, "reports"), true);
-  assert.notEqual(validateUserUpdate({ id: ids.user }, { id: ids.other, role: "customer" }, { role: "admin" }), "");
+  assert.equal(validateUserUpdate({ id: ids.user, role: "superadmin" }, { id: ids.other, role: "customer" }, { role: "admin" }), "");
 });
 
 test("sellers can only open their product workspace and cannot access store operations", async () => {
   user.role = "seller";
-  assert.equal((await request("/admin/products")).status, 200);
+  assert.equal((await request("/seller/products")).status, 200);
   assert.deepEqual(productFilter, { seller: ids.user });
-  for (const path of ["/admin/orders", "/admin/inventory", "/admin/coupons", "/admin/categories"]) {
+  for (const path of ["/seller/orders", "/seller/inventory", "/seller/coupons", "/seller/categories"]) {
     const result = await request(path, { method: path.endsWith("categories") ? "POST" : "GET", body: path.endsWith("categories") ? { name: "Injected collection" } : undefined });
     assert.equal(result.status, 403, path);
   }
   assert.equal(can(user, "catalog"), true);
   assert.equal(can(user, "inventory"), false);
 });
+test("seller dashboard metrics are scoped to the signed-in seller", async () => {
+  user.role = "seller";
+  products[0].seller = ids.user;
+  products[0].stock = 3;
+  const result = await request("/seller/dashboard");
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.summary, { products: 1, lowStock: 1, outOfStock: 0 });
+  assert.deepEqual(productCountFilters, [
+    { seller: ids.user },
+    { seller: ids.user, stock: { $gt: 0, $lte: 5 } },
+    { seller: ids.user, stock: 0 },
+  ]);
+});
 test("seller listings publish immediately, belong to their creator and reject edits to another seller's products", async () => {
   user.role = "seller";
-  const result = await request("/admin/products", {
+  const result = await request("/seller/products", {
     method: "POST",
     body: { name: "Seller product", category: "Home", categorySlug: "home", description: "A useful product", image: "https://example.test/item.jpg", price: 20, stock: 8, variants: [{ sku: "SELLER-1", size: "M", color: "Blue", price: 20, stock: 8 }], seller: ids.other, featured: true, isDemo: true, quickEligible: true },
   });
@@ -155,13 +181,13 @@ test("seller listings publish immediately, belong to their creator and reject ed
   assert.equal(result.body.product.quickEligible, false);
   assert.equal(writes.find(([type]) => type === "movement")[1][0].delta, 8);
 
-  const updated = await request(`/admin/products/${ids.product}`, { method: "PATCH", body: { price: 20, stock: 8, variants: [{ sku: "SELLER-1", size: "M", color: "Blue", price: 20, stock: 10 }, { sku: "SELLER-2", size: "L", color: "Blue", price: 25, stock: 2 }] } });
+  const updated = await request(`/seller/products/${ids.product}`, { method: "PATCH", body: { price: 20, stock: 8, variants: [{ sku: "SELLER-1", size: "M", color: "Blue", price: 20, stock: 10 }, { sku: "SELLER-2", size: "L", color: "Blue", price: 25, stock: 2 }] } });
   assert.equal(updated.status, 200);
   assert.equal(updated.body.product.stock, 12);
   assert.deepEqual(writes.filter(([type]) => type === "movement").at(-1)[1].map((movement) => movement.delta), [2, 2]);
 
   products[0].seller = ids.other;
-  const forbidden = await request(`/admin/products/${ids.product}`, { method: "PATCH", body: { price: 1 } });
+  const forbidden = await request(`/seller/products/${ids.product}`, { method: "PATCH", body: { price: 1 } });
   assert.equal(forbidden.status, 404);
 });
 test("inventory writes include stock movement, reject duplicate import rows and require inventory scope", async () => {

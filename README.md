@@ -45,13 +45,13 @@ ShopSphere is a React/Vite single-page storefront with a separate Express API. P
    npm --prefix server run create-super-admin
    ```
 
-   There is one store management panel: Super Admin. Additional owners require a secure invitation.
+   The website owner uses the separate Super Admin panel. Additional owners require a secure invitation. Seller accounts use the Seller Center at `/seller`.
 
 If the API is offline, product pages use a clearly labeled preview catalog; authentication, checkout, and admin changes require the API and database to be available. No customer, order, or database data is faked in preview mode.
 
-## Super Admin structure
+## Management architecture
 
-All store management code lives in `src/super-admin/` and `server/super-admin/`. The regular Admin module and its setup command have been removed. Start with `src/App.jsx` for page routes and `server/app.js` for API mounting.
+The Super Admin workspace remains owner-only and unchanged. Sellers use one Seller Center for their own product listings and inventory; the API scopes every seller product operation to the signed-in account. Legacy Admin accounts are routed to this seller-scoped workspace and no longer have an Admin dashboard or staff APIs.
 
 ```text
 src/
@@ -64,17 +64,16 @@ src/
     components/
       CatalogManager.jsx           # Catalog/order editor; shared seller listing mode
       VariantEditor.jsx            # Size/color/SKU editor
-      AdminSidebar.jsx
-      AdminNavbar.jsx
-      ProtectedAdminRoute.jsx
     layouts/
     hooks/
     services/
     styles/                        # All management and commerce-tool styles
   seller/
-    SellerPage.jsx                 # Existing seller listings only
+    SellerPage.jsx                 # Seller Center, stock overview and owned listings
 
 server/
+  seller/
+    routes/sellerRoutes.js         # Seller-only, ownership-scoped dashboard metrics
   super-admin/
     routes/
       superAdminRoutes.js          # Overview, accounts, settings, invitations
@@ -82,7 +81,7 @@ server/
       commerceToolsRoutes.js       # Inventory, offers, reviews, reports, shipments
       walletAdminRoutes.js
     policies/superAdminPolicy.js
-    permissions.js                 # Super Admin access; scoped seller catalog access
+    permissions.js                 # Shared Super Admin and owner permission checks
     services/superAdminAuth.js
     scripts/
       createSuperAdmin.js
@@ -92,9 +91,13 @@ server/
   tests/
 ```
 
-`/admin` redirects to `/super-admin/dashboard`; `/management` redirects to `/super-admin/commerce`. These aliases always pass through Super Admin route protection. Customer and legacy regular-admin accounts cannot access store management. Existing legacy admin records remain readable and are not automatically promoted; the owner can block them or change them to customer/seller in Users & access. New regular-admin roles and staff permission assignments are rejected by the API. The existing `/api/admin/*` URL namespace remains as an API compatibility path for the consolidated tools and seller listings; it does not expose a separate Admin panel or grant regular admins access.
+`/seller` opens the Seller Center. `/seller/products` and `/seller/categories` APIs allow sellers to manage their own products and read available categories; `/seller/dashboard` returns product and stock counts scoped to that seller. Old `/admin` page links redirect to `/seller`, while the removed staff APIs no longer grant seller or legacy Admin accounts access to other accounts, orders or owner operations. `/super-admin/*` remains owner-only, and `/management` redirects to `/super-admin/commerce`.
+
+The Seller Center uses a responsive supplier dashboard with a white sidebar, purple accents, a catalog overview, real stock counts, inventory filters, server-side product search and 25-row pagination. Add or edit a catalog in the product dialog with a photo URL preview, pricing, stock and optional size/color SKUs. The dialog preserves unsaved edits until saved or explicitly discarded. Saving or deleting a product refreshes both the listing and summary. Help and account details are available from the sidebar; all storefront controls are hidden while inside the seller workspace.
 
 Customers, sellers, orders, products, shared styles and the MongoDB connection are preserved. Use `npm run dev:api` and `npm run dev` in separate terminals, as before.
+
+The current data model does not yet include seller application/approval states, subcategories/brands, commissions, withdrawal requests, returns, or support tickets. Their dashboards/workflows are intentionally not represented by placeholder data. Owner-only wallet and finance functions remain restricted to Super Admin.
 
 ## Super admin control center
 
@@ -227,7 +230,7 @@ The separate Render deployment remains optional: use `render.yaml`, keep secrets
 - `/`, `/products`, `/products/:id`, `/categories/:category`
 - `/cart`, `/wishlist`, `/checkout`
 - `/login`, `/register`, `/my-orders`, `/my-orders/:id`, `/profile`
-- `/admin` (redirects to the protected Super Admin dashboard)
+- `/seller` (seller account required; legacy `/admin` links redirect here)
 - `/super-admin` (super administrator account required)
 
 The API is mounted at `/api`; `GET /api/health` reports API and database connection status.
@@ -258,14 +261,14 @@ Validation: `npm --prefix server test` covers role enforcement, COD checkout, pa
 
 OTP, forgot-password and administrator 2FA were intentionally left out of this upgrade. Existing password sign-in and server-side authentication remain in place.
 
-Open **Super Admin / Commerce tools** at `/super-admin/commerce`. Catalog and orders are managed from the same Super Admin sidebar. The old `/management` and `/admin` page URLs redirect into this protected panel. Customer notifications are at `/notifications`; invoices and shipment history are in each customer's order details.
+Open **Super Admin / Commerce tools** at `/super-admin/commerce`. Owner catalog and orders remain in the Super Admin sidebar. The old `/management` page URL redirects into this protected panel; legacy `/admin` links now open the Seller Center. Customer notifications are at `/notifications`; invoices and shipment history are in each customer's order details.
 
 - **Variants:** Add size/color options with unique immutable SKUs, independent prices and stock in the product editor. Existing SKU stock is changed through Inventory, so checkout and adjustments share the same transaction-backed ledger. Prices are reloaded from MongoDB at checkout; browser totals are never trusted. Existing orders keep their original item/variant prices. Product starting price is the cheapest option, including sold-out options; customers must choose an available option.
 - **Offers:** Create fixed or percentage codes with currency, minimum cart value, discount cap, start/expiry dates and total usage limit. Each customer can use a code once. Capacity and customer use are reserved transactionally for online orders; pending reservations expire after 30 minutes and are released by maintenance. Shipping eligibility uses the subtotal after discounts. Cancelled orders release the reservation; discounted cancelled orders must be reordered rather than reopened. Captures arriving after the payment window are flagged for refund review, not fulfilled automatically.
 - **Inventory:** Adjust stock with a reason, inspect recent movements and import up to 100 rows atomically. CSV header: `productId,variantSku,stock,reason`. `stock` is the desired final quantity; use a blank SKU for products without options. Product IDs/SKUs appear in the overview. Low-stock crossings queue an owner email when the recipient and email provider are configured. Earlier stock changes are not backfilled. Products in active orders cannot be deleted.
 - **Reviews:** Customers can submit/update one review per product after a delivered purchase, with up to three HTTPS photo URLs. Photos use externally hosted URLs; this does not upload files to Vercel. Super Admins can hide/publish reviews. Ratings are calculated from published verified reviews. Preview/sample rating figures are not added to product structured data.
 - **Reports:** 7/30/90-day order value and online collected amounts grouped by currency, daily UTC charts, best-selling quantities and inactive signed-in customer carts (30+ minutes), plus CSV export. Order value includes COD orders and is not profit or cash collected. Best-seller item value is before order-level discounts/shipping. Carts are repriced by the server when saved; guest carts are local only. Current screens show at most 100 inactive carts, 100 recent stock movements, 100 review submissions, 200 coupons and 500 inventory products.
-- **Management access:** Only Super Admins manage catalog, inventory, orders, support, reviews and reports. Sellers manage their own listings. Legacy regular-admin accounts have no management access, and new regular-admin roles or permission assignments are rejected. Owner provisioning requires a secure invitation or the server command.
+- **Management access:** Super Admins retain owner controls. Seller Center accounts manage only their own listings and stock. Legacy regular-admin accounts are restricted to the same seller-scoped workspace and cannot access staff or owner operations. Owner provisioning requires a secure invitation or the server command.
 - **Shipment tracking:** Assign a carrier, AWB, optional HTTPS carrier link and delivery estimate in Shipments. Customers see shipment history and the order page polls the store API every 30 seconds. Set the carrier to `Shiprocket` for courier sync; while the shipment is active, opening/polling the order page requests courier updates with a five-minute cache. A manual refresh button uses the same cache. Provider scans never change payment or fulfillment state. Super Admins mark order fulfillment status in the Orders workspace. Other couriers work through the entered tracking link and manually managed order states.
 - **Notifications:** Price-drop and back-in-stock subscriptions are on product pages; customers can remove them in Notifications. They use the product's starting price and total stock, not individual variant availability. Triggered subscriptions are one-shot; changes are checked when product prices/stock are updated through the application. Direct database changes do not generate alerts. Order-status changes queue customer email and an inbox update. Emails use the existing durable Resend outbox.
 - **Invoices:** Order owners and Super Admins can download authenticated PDFs with original item prices, discounts, shipping, currency and actual payment state. Pending online orders are labelled pro forma; COD invoices say payment pending. This is an order invoice without tax calculation or GST registration fields, not an automatically generated GST tax invoice. Noto Sans Devanagari fonts embed English and Hindi names/addresses; fields are not translated.

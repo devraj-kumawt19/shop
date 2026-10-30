@@ -185,7 +185,7 @@ export function RequireAuth({ children, superAdmin = false, seller = false }) {
   const { user } = useShop();
   const location = useLocation();
   if (!user) return <Navigate to="/login" state={{ from: `${location.pathname}${location.search}${location.hash}` }} replace />;
-  if ((superAdmin && user.role !== "superadmin") || (seller && user.role !== "seller")) return <main id="main-content" className="page-width empty-state"><span className="eyebrow">RESTRICTED ACCESS</span><h1>{superAdmin ? "Super admin" : seller ? "Seller" : "Account"} access only.</h1><p>Sign in with an authorized account to manage the website.</p><Link to="/" className="button button-dark">Back to the shop</Link></main>;
+  if ((superAdmin && user.role !== "superadmin") || (seller && !["seller", "admin"].includes(user.role))) return <main id="main-content" className="page-width empty-state"><span className="eyebrow">RESTRICTED ACCESS</span><h1>{superAdmin ? "Super admin" : "Seller"} access only.</h1><p>Sign in with an authorized account to manage the website.</p><Link to={seller && user.role === "customer" ? "/sell" : "/"} className="button button-dark">{seller && user.role === "customer" ? "Become a seller" : "Back to the shop"}</Link></main>;
   return children;
 }
 

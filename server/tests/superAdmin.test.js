@@ -77,11 +77,10 @@ test("login verifies the password and returns a signed bearer token", async () =
   assert.ok(Number.isInteger(payload.exp));
   assert.equal((await request("/auth/login", { method: "POST", body: { email: "customer@example.test", password: "wrong-password" } })).status, 401);
 });
-test("public registration cannot inject privileged seller or admin roles", async () => {
+test("public registration rejects attempts to create a Super Admin account", async () => {
   const result = await request("/auth/register", { method: "POST", body: { name: "Test User", email: "new@example.test", password: "example-password-123", role: "superadmin", isActive: false } });
-  assert.equal(result.status, 201);
-  assert.equal(result.body.user.role, "customer");
-  assert.equal(users[result.body.user.id].isActive, undefined);
+  assert.equal(result.status, 400);
+  assert.equal(Object.values(users).some((user) => user.email === "new@example.test"), false);
 });
 test("only super admins can create seller accounts with validated passwords", async () => {
   const body = { name: "Marketplace Seller", email: "SELLER@example.test", password: "seller-password-123" };
@@ -130,11 +129,12 @@ test("profile photo updates reject malformed and oversized image data", async ()
   assert.equal(users[ids.customer].profileImage, undefined);
 });
 test("super admin can update customer access; blocking takes effect on existing tokens", async () => {
-  assert.equal((await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { role: "admin" } })).status, 400);
+  assert.equal((await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { role: "admin" } })).status, 200);
+  assert.equal(users[ids.customer].role, "admin");
   assert.equal((await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { role: "customer" } })).status, 200);
   assert.equal((await request(`/super-admin/users/${ids.customer}`, { key: "owner", method: "PATCH", body: { isActive: false } })).status, 200);
   assert.equal((await request("/auth/me", { key: "customer" })).status, 401);
-  assert.equal(activity.length, 2);
+  assert.equal(activity.length, 3);
   assert.equal(activity[0].actor, ids.owner);
 });
 test("seller role and account status update listing visibility atomically", async () => {

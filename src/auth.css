@@ -169,3 +169,4 @@
   .access-guest > span, .access-guest > a { font-size: 9px; }
 }
 @media (prefers-reduced-motion: reduce) { .access-page *, .access-page *::before, .access-page *::after { animation: none !important; transition: none !important; } }
+.access-field select { width: 100%; padding: 12px; border: 1px solid #deded8; border-radius: 8px; background: white; color: #26392f; font: inherit; }

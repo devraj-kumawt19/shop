@@ -29,7 +29,7 @@ export async function acceptInvitation(input) {
   try {
     await session.withTransaction(async () => {
       // Claim and create in one transaction: replay, concurrent requests and failed account creation cannot consume a valid invite twice.
-      const invitation = await SuperAdminInvitation.findOneAndUpdate({ tokenHash: hashInvitation(invitationToken), email: normalizedEmail, acceptedAt: null, expiresAt: { $gt: new Date() } }, { $set: { acceptedAt: new Date() } }, { new: true, session });
+      const invitation = await SuperAdminInvitation.findOneAndUpdate({ tokenHash: hashInvitation(invitationToken), email: normalizedEmail, acceptedAt: null, expiresAt: { $gt: new Date() } }, { $set: { acceptedAt: new Date() } }, { returnDocument: "after", session });
       if (!invitation) throw invalidInvitation();
       // Recheck the inviter's current role and status, never a role supplied by the registering client.
       const owner = await User.findById(invitation.invitedBy).session(session);

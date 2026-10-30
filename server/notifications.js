@@ -42,7 +42,7 @@ export async function dispatchNotifications({ maxJobs = 10, deadline = Infinity 
   for (let count = 0; count < maxJobs; count++) {
     if (Date.now() + 5000 >= deadline) break;
     const now = new Date();
-    const job = await Notification.findOneAndUpdate({ status: "pending", attempts: { $lt: 8 }, nextAttempt: { $lte: now }, lockedUntil: { $lte: now } }, { $set: { lockedUntil: new Date(Date.now() + 60000) }, $inc: { attempts: 1 } }, { new: true }).lean();
+    const job = await Notification.findOneAndUpdate({ status: "pending", attempts: { $lt: 8 }, nextAttempt: { $lte: now }, lockedUntil: { $lte: now } }, { $set: { lockedUntil: new Date(Date.now() + 60000) }, $inc: { attempts: 1 } }, { returnDocument: "after" }).lean();
     if (!job) break;
     try {
       const response = await fetch("https://api.resend.com/emails", {

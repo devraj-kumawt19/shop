@@ -53,7 +53,7 @@ before(async () => {
   mock.method(User, "create", async (input) => {
     const details = Array.isArray(input) ? input[0] : input;
     if (Object.values(users).some((user) => user.email === details.email)) throw Object.assign(new Error("Duplicate email"), { code: 11000 });
-    const user = { ...makeUser(new mongoose.Types.ObjectId().toString(), details.role, details.email), name: details.name };
+    const user = { ...makeUser(new mongoose.Types.ObjectId().toString(), details.role, details.email), name: details.name, permissions: details.permissions || [] };
     users[user.id] = user;
     return Array.isArray(input) ? [user] : user;
   });
@@ -123,6 +123,35 @@ test("invitation registration creates the authorized owner and cannot replay the
   assert.equal((await request("/super-admin/auth/register", { method: "POST", body: registration(invitation) })).status, 400);
 });
 
+test("people can self-register as sellers while only the owner can create legacy staff accounts", async () => {
+  const seller = await request("/auth/register", {
+    method: "POST",
+    body: { name: "New Seller", email: "seller-self-register@example.test", password: "seller-password-123", role: "seller" },
+  });
+  assert.equal(seller.status, 201);
+  assert.equal(seller.data.user.role, "seller");
+
+  const staffDetails = { name: "New Staff", email: "new-staff@example.test", password: "staff-password-123" };
+  assert.equal((await request("/super-admin/sellers", { token: tokenFor(adminId), method: "POST", body: staffDetails })).status, 403);
+  assert.equal((await request("/super-admin/admins", { token: tokenFor(adminId), method: "POST", body: { ...staffDetails, email: "blocked-admin@example.test" } })).status, 403);
+
+  const createdAdmin = await request("/super-admin/admins", {
+    token: tokenFor(ownerId),
+    method: "POST",
+    body: { ...staffDetails, email: "new-admin@example.test", permissions: ["catalog", "sellers"] },
+  });
+  assert.equal(createdAdmin.status, 201);
+  assert.equal(createdAdmin.data.admin.role, "admin");
+  assert.deepEqual(createdAdmin.data.admin.permissions, ["catalog", "sellers"]);
+  for (const role of ["admin", "superadmin"]) {
+    const result = await request("/auth/register", {
+      method: "POST",
+      body: { name: "Invalid Staff", email: `public-${role}@example.test`, password: "staff-password-123", role },
+    });
+    assert.equal(result.status, 400);
+  }
+});
+
 test("concurrent invitation acceptance has only one successful claimant", async () => {
   const invitation = await invite();
   const results = await Promise.all([1, 2].map(() => request("/super-admin/auth/register", { method: "POST", body: registration(invitation) })));
@@ -183,6 +212,35 @@ test("administrator list applies server role/status/search filters and validates
   for (const suffix of ["group=admins&role=customer", "role=root", "status=invalid"]) assert.equal((await request(`/super-admin/users?${suffix}`, { token: tokenFor(ownerId) })).status, 400);
 });
 
+test("legacy admin accounts use seller-scoped product access and cannot use staff APIs", async () => {
+  const token = tokenFor(adminId);
+  assert.equal((await request("/admin/dashboard", { token })).status, 403);
+  assert.equal((await request("/admin/accounts/users", { token })).status, 403);
+  assert.equal((await request("/seller/products", { token })).status, 200);
+  assert.deepEqual(catalogFilters[0], { seller: adminId });
+  assert.equal((await request("/seller/dashboard", { token })).data.summary.products, 48);
+  users[adminId].permissions = ["catalog", "customers", "orders", "reports"];
+  assert.equal((await request("/seller/products", { token })).status, 200);
+  assert.equal((await request("/admin/orders", { token })).status, 403);
+  assert.equal((await request("/admin/inventory", { token })).status, 403);
+  assert.equal((await request("/admin/reports", { token })).status, 403);
+  assert.equal((await request("/super-admin/settings", { token })).status, 403);
+});
+
+test("seller dashboard counts only the signed-in seller's listings and rejects other roles", async () => {
+  const token = tokenFor(customerId);
+  users[customerId].role = "seller";
+  const metrics = await request("/seller/dashboard", { token });
+  assert.equal(metrics.status, 200);
+  assert.deepEqual(metrics.data.summary, { products: 48, lowStock: 48, outOfStock: 48 });
+  assert.deepEqual(catalogFilters, []);
+
+  users[customerId].role = "customer";
+  assert.equal((await request("/seller/dashboard", { token })).status, 403);
+  users[customerId].role = "superadmin";
+  assert.equal((await request("/seller/dashboard", { token })).status, 403);
+});
+
 test("paginated catalog/order APIs apply safe search and filters while retaining legacy unpaginated responses", async () => {
   const token = tokenFor(ownerId);
   const products = await request("/admin/products?page=2&search=%5B.*&status=low_stock", { token });
@@ -199,17 +257,17 @@ test("paginated catalog/order APIs apply safe search and filters while retaining
   assert.equal((await request("/admin/orders?page=1", { token: tokenFor(customerId) })).status, 403);
 });
 
-test("retired admin tokens cannot mutate management data or assign privileges", async () => {
+test("admin tokens remain limited to staff access even when their JWT claims Super Admin", async () => {
   const token = tokenFor(adminId, { role: "superadmin" });
+  users[adminId].permissions = ["catalog", "sellers"];
+  assert.equal((await request("/seller/products", { token })).status, 200);
+  assert.deepEqual(catalogFilters[0], { seller: adminId });
   for (const [path, method, body] of [
-    ["/admin/products", "POST", { name: "Injected product" }],
-    ["/admin/categories", "POST", { name: "Injected collection" }],
-    ["/admin/inventory/adjust", "POST", { stock: 100 }],
-    ["/admin/coupons", "POST", { code: "INJECTED" }],
-    [`/admin/orders/${customerId}`, "PATCH", { status: "shipped" }],
+    ["/admin/orders", "GET"],
+    ["/admin/accounts/admins", "POST", { name: "Injected admin", email: "injected-admin@example.test", password: "password-long-enough" }],
     ["/super-admin/invitations", "POST", { email: "injected@example.test" }],
-  ]) assert.equal((await request(path, { token, method, body })).status, 403, path);
-  for (const body of [{ role: "admin" }, { role: "superadmin" }, { permissions: ["catalog"] }]) {
+  ]) assert.ok([403, 404].includes((await request(path, { token, method, body })).status), path);
+  for (const body of [{ role: "root" }, { role: "superadmin" }, { permissions: ["catalog"] }]) {
     assert.equal((await request(`/super-admin/users/${customerId}`, { token: tokenFor(ownerId), method: "PATCH", body })).status, 400);
   }
   assert.equal(users[adminId].role, "admin");
@@ -217,11 +275,13 @@ test("retired admin tokens cannot mutate management data or assign privileges", 
   assert.equal(invitations.length, 0);
 });
 
-test("sign-in destinations expose one owner panel and keep retired admins out of management", () => {
+test("sign-in destinations send each account role to its authorized workspace", () => {
   assert.equal(authDestination("superadmin"), "/super-admin/dashboard");
-  for (const role of ["admin", "customer"]) {
-    for (const path of ["/admin", "/super-admin/dashboard", "/super-admin/commerce"]) assert.equal(authDestination(role, path), "/profile");
-  }
+  assert.equal(authDestination("admin"), "/seller");
+  assert.equal(authDestination("admin", "/super-admin/dashboard"), "/seller");
+  assert.equal(authDestination("admin", "/super-admin/commerce"), "/seller");
+  assert.equal(authDestination("admin", "/admin/dashboard"), "/seller");
+  assert.equal(authDestination("customer", "/admin"), "/profile");
   assert.equal(authDestination("seller"), "/seller");
   assert.equal(authDestination("seller", "/super-admin/products"), "/seller");
 });
