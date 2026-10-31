@@ -1,14 +1,11 @@
-import { MarketplaceStrip } from "./DealsPage.jsx";
 import { OrderExtras } from "./CommerceWidgets.jsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowUpRight, ArrowLeft, ArrowRight, Camera, Check, ChevronRight, Heart, LoaderCircle, Mail, Minus, PackageCheck, Plus, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Star, Tag, Trash2, Truck, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, Check, ChevronRight, Heart, LoaderCircle, Mail, Minus, PackageCheck, Plus, ShieldCheck, ShoppingBag, SlidersHorizontal, Trash2, Truck, UserRound } from "lucide-react";
 import api, { getErrorMessage } from "./api.js";
-import { categories } from "./data.js";
-import { useCategories, useProduct, useProducts } from "./hooks/useProducts.js";
+import { useCategories, useProducts } from "./hooks/useProducts.js";
 import { useMoney, useShop } from "./ShopContext.jsx";
-import { ProductCard, ProductGrid, StatusMessage } from "./components.jsx";
-import Reveal from "./Reveal.jsx";
+import { ProductGrid, StatusMessage } from "./components.jsx";
 import { payForOrder } from "./payment.js";
 
 const subtotalFor = (cart) => cart.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
@@ -52,72 +49,9 @@ async function prepareProfilePhoto(file) {
   }
 }
 
-export function HomePage() {
-  const money = useMoney();
-  const { settings, settingsError } = useShop();
-  const { products, loading, error } = useProducts({ featured: "true", limit: "8" });
-  const saleProducts = useProducts({ sale: "true", limit: "4" });
-  const collections = useCategories();
-  const storefrontCategories = collections.categories;
-  const spotlightCollection = storefrontCategories.find((category) => category.slug === "tech-audio") || storefrontCategories[0];
-  const [activeCollection, setActiveCollection] = useState("");
-  const featuredProducts = activeCollection ? products.filter((product) => product.categorySlug === activeCollection) : products;
-  return (
-    <main id="main-content">
-      {settings.saleEnabled && (saleProducts.loading || saleProducts.products.length > 0) && <Link className="live-sale-bar" to="/sale"><span><Tag size={15} /> THE GOOD FINDS SALE</span><strong>{settings.saleTitle}</strong><span>Shop the offers <ArrowRight size={15} /></span></Link>}
-      <MarketplaceStrip />
-      <section className="home-hero">
-        <div className="hero-orbit orbit-one" aria-hidden="true" />
-        <div className="hero-orbit orbit-two" aria-hidden="true" />
-        <div className="hero-text">
-          <div className="hero-announcement"><span className="announcement-dot" /> YOUR EVERYDAY, REIMAGINED <Sparkles size={14} /></div>
-          <h1>{settings.heroHeading.split("\n").map((line, index) => <span key={index}>{line}<br /></span>)}<em>{settings.heroAccent}</em></h1>
-          <p>{settings.heroDescription}</p>
-          <div className="hero-cta-row"><Link to={settings.saleEnabled ? "/sale" : "/products"} className="button button-dark">{settings.saleEnabled ? "Shop the sale" : "Explore the shop"} <ArrowRight size={18} /></Link><a className="button button-outline" href="#collections">Find your collection <ChevronRight size={17} /></a></div>
-          <div className="hero-proof"><span className="proof-icon"><ShieldCheck size={22} /></span><span><b>Thoughtfully picked. Effortlessly loved.</b><small>Quality essentials. Easy returns. Everyday joy.</small></span></div>
-        </div>
-        <div className="hero-showcase">
-          <div className="showcase-dots" aria-hidden="true" />
-          <Link className="showcase-main" to="/products">
-            <div className="showcase-top"><span><span className="mini-dot" /> THE EVERYDAY EDIT</span><span>01 / 04</span></div>
-            <img src={settings.heroImage} alt={`${settings.siteName} featured collection`} fetchpriority="high" />
-            <div className="showcase-bottom"><span><small>YOUR SPACE, YOUR WAY</small><strong>Make yourself at home.</strong></span><span className="round-arrow"><ArrowRight size={21} /></span></div>
-          </Link>
-          <Link className="floating-product" to={spotlightCollection ? `/categories/${spotlightCollection.slug}` : "/products"}><img src={spotlightCollection?.image || settings.heroImage} alt={spotlightCollection?.name || "Featured collection"} /><div><span className="eyebrow">A LITTLE EVERYDAY UPGRADE</span><strong>{spotlightCollection?.name || "Find your favorite."}</strong><span>Explore collection <ArrowRight size={13} /></span></div></Link>
-          <div className="floating-note"><span className="note-icon"><ShoppingBag size={20} /></span><span><strong>Your next favorite is here.</strong><small>A little discovery. A lot to love.</small></span><Sparkles size={18} /></div>
-          <span className="showcase-caption"><span /> CURATED FOR THE WAY YOU LIVE</span>
-        </div>
-      </section>
-      {settings.saleEnabled && (saleProducts.loading || saleProducts.products.length > 0) && <Reveal className="sale-section page-width"><div className="section-heading"><div><span className="eyebrow"><Tag size={14} /> THE SALE EDIT</span><h2>{settings.saleTitle}</h2><p>{settings.saleDescription}</p></div><Link className="button button-sale" to="/sale">All sale finds <ArrowRight size={16} /></Link></div><ProductGrid products={saleProducts.products} loading={saleProducts.loading} error={saleProducts.error} showError={saleProducts.error !== settingsError} /></Reveal>}
-      <section className="benefit-strip">
-        <div><Truck /><span><b>Free shipping over {money(settings.freeShippingThreshold)}</b><small>Good things, delivered</small></span></div>
-        <div><ShieldCheck /><span><b>Good things, chosen well</b><small>Thoughtful quality, every time</small></span></div>
-        <div><PackageCheck /><span><b>30 days to decide</b><small>Easy returns, no hard feelings</small></span></div>
-        <div><Heart /><span><b>Made for your everyday</b><small>Small details. Big difference.</small></span></div>
-      </section>
-      <Reveal className="category-section page-width" id="collections">
-        <div className="section-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> SOMETHING FOR EVERY SIDE OF YOU</span><h2>Find your kind of <em>good.</em></h2><p>Four collections. Endless little possibilities.</p></div><Link className="subtle-link" to="/products">Explore all collections <ArrowRight size={16} /></Link></div>
-        <div className="category-grid">
-          {storefrontCategories.map((category, index) => <Link to={`/categories/${category.slug}`} className={`category-tile ${category.tone || ""}`} key={category.slug}><div className="category-image"><img src={category.image || categories.find((item) => item.slug === category.slug)?.image || ""} alt={category.name} loading="lazy" /><span className="collection-number">0{index + 1}</span></div><div className="category-copy"><small>{["A SPACE TO BE YOU", "YOUR DAILY SOUNDTRACK", "GO PLACES, BEAUTIFULLY", "YOUR MOMENT TO RESET"][index % 4]}</small><h3>{category.name}</h3><span className="category-arrow"><ArrowRight size={18} /></span></div></Link>)}
-        </div>
-        {collections.error && collections.error !== settingsError && <StatusMessage tone={collections.error.startsWith("Demo") ? "info" : "error"}>{collections.error}</StatusMessage>}
-      </Reveal>
-      <Reveal className="featured-section page-width">
-        <div className="section-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> THE GOOD STUFF, ALL IN ONE PLACE</span><h2>Meet your next <em>favorite.</em></h2><p>Everyday essentials with a little something extra.</p></div><Link className="subtle-link" to="/products">Shop all finds <ArrowRight size={16} /></Link></div>
-        <div className="collection-tabs" role="group" aria-label="Filter featured products by collection"><button type="button" aria-pressed={!activeCollection} className={!activeCollection ? "active" : ""} onClick={() => setActiveCollection("")}><Sparkles size={14} /> All favorites</button>{storefrontCategories.map((category) => <button type="button" key={category.slug} aria-pressed={activeCollection === category.slug} className={activeCollection === category.slug ? "active" : ""} onClick={() => setActiveCollection(category.slug)}>{category.name}</button>)}</div>
-        <ProductGrid products={featuredProducts} loading={loading} error={error} showError={error !== settingsError} emptyMessage="New favorites are on their way." />
-      </Reveal>
-      <Reveal className="editorial-banner page-width">
-        <div><span className="eyebrow"><Sparkles size={15} /> LITTLE UPGRADES. BIG EVERYDAY ENERGY.</span><h2>A better everyday<br />starts with <em>you.</em></h2><p>Slow mornings. Fresh spaces. Your favorite soundtrack. Find the little things that make life feel a little more yours.</p><Link to="/products" className="button button-light">Discover something good <ArrowRight size={17} /></Link><span className="editorial-note"><Check size={14} /> Considered details. Lasting favorites.</span></div>
-        <div className="editorial-image"><img src="https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=1100&q=85" alt="Soft morning light on an inviting home interior" loading="lazy" /></div>
-      </Reveal>
-    </main>
-  );
-}
+export { default as HomePage } from "./HomePage.jsx";
 
 export function ProductsPage() {
-  const money = useMoney();
-  const { settingsError } = useShop();
   const location = useLocation();
   const navigate = useNavigate();
   const { categories: storefrontCategories } = useCategories();
@@ -125,15 +59,14 @@ export function ProductsPage() {
   const query = new URLSearchParams(location.search);
   const search = query.get("search") || "";
   const page = Math.max(1, Math.floor(Number(query.get("page")) || 1));
-  const [sort, setSort] = useState("featured");
-  const [categoryFilter, setCategoryFilter] = useState(category || "");
+  const sort = ["featured", "price-low", "price-high", "rating"].includes(query.get("sort")) ? query.get("sort") : "featured";
+  const categoryFilter = category || "";
   const { products, loading, error, pagination } = useProducts({
     category: categoryFilter, search, sale: query.get("sale") === "true" ? "true" : "",
     sort, page: String(page), limit: "24",
   });
-  useEffect(() => setCategoryFilter(category || ""), [category]);
   useEffect(() => {
-    if (loading || error || !pagination.pages || page <= pagination.pages) return;
+    if (loading || error && !error.startsWith("Demo") || !pagination.pages || page <= pagination.pages) return;
     const nextQuery = new URLSearchParams(location.search);
     nextQuery.set("page", String(pagination.pages));
     navigate(`${location.pathname}?${nextQuery}`, { replace: true });
@@ -145,15 +78,21 @@ export function ProductsPage() {
     const queryString = nextQuery.toString();
     navigate(`${location.pathname}${queryString ? `?${queryString}` : ""}`);
   }
+  function changeSort(value) {
+    const nextQuery = new URLSearchParams(location.search);
+    nextQuery.set("sort", value);
+    nextQuery.delete("page");
+    navigate(`${location.pathname}?${nextQuery}`);
+  }
   const title = query.get("sale") === "true" ? "A little sale. A lot to love." : category ? storefrontCategories.find((item) => item.slug === category)?.name || "Shop by category" : search ? `Results for “${search}”` : "A few good finds.";
   return (
     <main id="main-content" className="catalog-page page-width">
       <div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} /><span>{category ? "Collections" : "Shop"}</span></div>
       <div className="catalog-intro"><span className="eyebrow">{search ? "A GOOD FIND IS CLOSER THAN YOU THINK" : "THOUGHTFULLY PICKED FOR REAL LIFE"}</span><h1>{title}</h1><p>Well-made essentials, lovely little upgrades, and pieces you’ll be glad to have around.</p></div>
-      <div className="catalog-toolbar"><span>{loading ? "Finding good things..." : error || settingsError ? "Catalog unavailable" : `${pagination.total} thoughtful ${pagination.total === 1 ? "find" : "finds"}`}</span><label><SlidersHorizontal size={15} /><span>Sort by</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="rating">Top rated</option></select></label></div>
+      <div className="catalog-toolbar"><span>{loading ? "Finding your next favorite..." : products.length ? `Showing ${(page - 1) * 24 + 1}–${Math.min(page * 24, pagination.total)} of ${pagination.total} products` : error && !error.startsWith("Demo") ? "Catalog unavailable" : "0 products"}</span><label><SlidersHorizontal size={15} /><span>Sort by</span><select value={sort} onChange={(event) => changeSort(event.target.value)}><option value="featured">Featured</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="rating">Top rated</option></select></label></div>
       {!category && <div className="filter-pills"><Link className={!categoryFilter ? "active" : ""} to="/products">All finds</Link>{storefrontCategories.map((item) => <Link className={categoryFilter === item.slug ? "active" : ""} key={item.slug} to={`/categories/${item.slug}`}>{item.name}</Link>)}</div>}
-      <ProductGrid products={products} loading={loading} error={error || settingsError} showError={error !== settingsError} emptyMessage="No finds for that search." />
-      {!error && pagination.pages > 1 && <nav className="catalog-pagination" aria-label="Product pages">
+      <ProductGrid products={products} loading={loading} error={error} emptyMessage="No finds for that search." />
+      {(!error || error.startsWith("Demo")) && pagination.pages > 1 && <nav className="catalog-pagination" aria-label="Product pages">
         <button type="button" disabled={loading || page <= 1} onClick={() => goToPage(page - 1)}>Previous</button>
         <span>Page {page} of {pagination.pages}</span>
         <button type="button" disabled={loading || page >= pagination.pages} onClick={() => goToPage(page + 1)}>Next</button>
@@ -334,11 +273,11 @@ export function ProfilePage() {
               {profileImage && <button type="button" className="profile-photo-remove" onClick={() => { setProfileImage(""); setNotice("Photo removed. Save your changes to update your profile."); setError(""); }} disabled={saving || processingPhoto}><Trash2 size={13} /> Remove</button>}
             </div>
             <p className="profile-photo-hint">JPG, PNG or WebP · up to 5 MB</p>
-            <div className="profile-account-type"><span /> ShopSphere member</div>
+            <div className="profile-account-type"><span /> LUXE CARTS member</div>
           </section>
 
           <section className="profile-links-card">
-            <span className="eyebrow">YOUR SHOPSPHERE</span>
+            <span className="eyebrow">YOUR LUXE CARTS</span>
             <Link to="/my-orders"><span className="profile-link-icon"><PackageCheck size={17} /></span><span><strong>Order history</strong><small>Check in on your recent orders</small></span><ArrowRight size={15} /></Link>
             <Link to="/wishlist"><span className="profile-link-icon"><Heart size={17} /></span><span><strong>Saved favorites</strong><small>All the good things you’ve saved</small></span><ArrowRight size={15} /></Link>
           </section>
@@ -349,5 +288,5 @@ export function ProfilePage() {
 }
 
 export function NotFoundPage() {
-  return <main id="main-content" className="page-width empty-state not-found"><span className="eyebrow">WELL, THIS IS AWKWARD</span><h1>That page took<br />a little <em>detour.</em></h1><p>We couldn’t find what you were looking for.</p><Link className="button button-dark" to="/">Back to ShopSphere <ArrowRight size={16} /></Link></main>;
+  return <main id="main-content" className="page-width empty-state not-found"><span className="eyebrow">WELL, THIS IS AWKWARD</span><h1>That page took<br />a little <em>detour.</em></h1><p>We couldn’t find what you were looking for.</p><Link className="button button-dark" to="/">Back to LUXE CARTS <ArrowRight size={16} /></Link></main>;
 }

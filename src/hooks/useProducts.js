@@ -15,7 +15,7 @@ export function useProducts(params = {}) {
     api.get(`/products${query ? `?${query}` : ""}`)
       .then(({ data }) => {
         if (!Array.isArray(data.products) || !Number.isInteger(data.total) || !Number.isInteger(data.page) || !Number.isInteger(data.pages)) {
-          throw new Error("ShopSphere API response is invalid.");
+          throw new Error("LUXE CARTS API response is invalid.");
         }
         if (active) {
           setProducts(data.products);
@@ -70,7 +70,7 @@ export function useProduct(id) {
     setLoading(true);
     api.get(`/products/${encodeURIComponent(id)}`)
       .then(({ data }) => {
-        if (!data.product || typeof data.product !== "object") throw new Error("ShopSphere API response is invalid.");
+        if (!data.product || typeof data.product !== "object") throw new Error("LUXE CARTS API response is invalid.");
         if (active) {
           setProduct(data.product);
           setError("");
@@ -103,7 +103,7 @@ export function useCategories() {
     let active = true;
     api.get("/categories")
       .then(({ data }) => {
-        if (!Array.isArray(data.categories)) throw new Error("ShopSphere API response is invalid.");
+        if (!Array.isArray(data.categories)) throw new Error("LUXE CARTS API response is invalid.");
         if (active) {
           setItems(data.categories);
           setError("");

@@ -14,26 +14,48 @@ const readStored = (key, fallback) => {
 };
 
 export function ShopProvider({ children }) {
-  const [cart, setCart] = useState(() => readStored("shopsphere_cart", []));
-  const [wishlist, setWishlist] = useState(() => readStored("shopsphere_wishlist", []));
-  const [user, setUser] = useState(() => readStored("shopsphere_user", null));
+  const [cart, setCart] = useState(() => readStored("luxecarts_cart", []));
+  const [wishlist, setWishlist] = useState(() => readStored("luxecarts_wishlist", []));
+  const [user, setUser] = useState(() => readStored("luxecarts_user", null));
   const [toast, setToast] = useState("");
   const [settings, setSettings] = useState(defaultStoreSettings);
   const [settingsError, setSettingsError] = useState("");
   const navigate = useNavigate();
   const refreshedCurrency = useRef("");
+  const settingsRequest = useRef(null);
 
-  const refreshSettings = useCallback(async () => {
-    try {
-      const { data } = await api.get("/settings");
-      if (!data.settings || typeof data.settings !== "object") throw new Error("ShopSphere API response is invalid.");
-      setSettings({ ...defaultStoreSettings, ...data.settings });
-      setSettingsError("");
-    } catch (error) {
-      setSettingsError(getErrorMessage(error));
-    }
+  const refreshSettings = useCallback(() => {
+    // Share concurrent reads, including React StrictMode's repeated mount effect.
+    if (settingsRequest.current) return settingsRequest.current;
+    const request = (async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const { data } = await api.get("/settings");
+          if (!data.settings || typeof data.settings !== "object" || Array.isArray(data.settings)) throw new Error("LUXE CARTS API response is invalid.");
+          setSettings({ ...defaultStoreSettings, ...data.settings });
+          setSettingsError("");
+          return;
+        } catch (error) {
+          const status = error.response?.status;
+          const retryable = [408, 429, 500, 502, 503, 504].includes(status) || !error.response && ["ERR_NETWORK", "ECONNABORTED"].includes(error.code);
+          if (attempt < 2 && retryable) {
+            await new Promise(resolve => window.setTimeout(resolve, 400 * 2 ** attempt));
+            continue;
+          }
+          setSettingsError(getErrorMessage(error));
+          return;
+        }
+      }
+    })();
+    settingsRequest.current = request;
+    request.finally(() => { settingsRequest.current = null; });
+    return request;
   }, []);
-  useEffect(() => { refreshSettings(); }, [refreshSettings]);
+  useEffect(() => {
+    refreshSettings();
+    window.addEventListener("online", refreshSettings);
+    return () => window.removeEventListener("online", refreshSettings);
+  }, [refreshSettings]);
   useEffect(() => {
     document.documentElement.style.setProperty("--blue", settings.primaryColor);
     document.documentElement.style.setProperty("--rust", settings.primaryColor);
@@ -42,9 +64,9 @@ export function ShopProvider({ children }) {
     document.title = `${settings.siteName} — Good things for every day`;
   }, [settings.primaryColor, settings.siteName]);
 
-  useEffect(() => { localStorage.setItem("shopsphere_cart", JSON.stringify(cart)); }, [cart]);
-  useEffect(() => { localStorage.setItem("shopsphere_wishlist", JSON.stringify(wishlist)); }, [wishlist]);
-  useEffect(() => { localStorage.setItem("shopsphere_user", JSON.stringify(user)); }, [user]);
+  useEffect(() => { localStorage.setItem("luxecarts_cart", JSON.stringify(cart)); }, [cart]);
+  useEffect(() => { localStorage.setItem("luxecarts_wishlist", JSON.stringify(wishlist)); }, [wishlist]);
+  useEffect(() => { localStorage.setItem("luxecarts_user", JSON.stringify(user)); }, [user]);
   useEffect(() => {
     if (settingsError || refreshedCurrency.current === settings.currency) return;
     const ids = [...new Set([...cart.map((item) => item.product._id), ...wishlist.map((p) => p._id)])].filter((id) => /^[a-f0-9]{24}$/i.test(id));
@@ -70,14 +92,14 @@ export function ShopProvider({ children }) {
   }, [toast]);
 
   const refreshUser = useCallback(() => {
-    const token = localStorage.getItem("shopsphere_token");
+    const token = localStorage.getItem("luxecarts_token");
     if (!token) return;
     api.get("/auth/me")
       .then(({ data }) => setUser(data.user))
       .catch((error) => {
         if (![401, 403].includes(error.response?.status)) return;
-        localStorage.removeItem("shopsphere_token");
-        localStorage.removeItem("shopsphere_user");
+        localStorage.removeItem("luxecarts_token");
+        localStorage.removeItem("luxecarts_user");
         setUser(null);
       });
   }, []);
@@ -85,9 +107,9 @@ export function ShopProvider({ children }) {
   const signIn = async (credentials, mode, endpoint = `/auth/${mode}`) => {
     const { data } = await api.post(endpoint, credentials);
     if (typeof data.token !== "string" || !data.user || typeof data.user !== "object") {
-      throw new Error("ShopSphere API response is invalid.");
+      throw new Error("LUXE CARTS API response is invalid.");
     }
-    localStorage.setItem("shopsphere_token", data.token);
+    localStorage.setItem("luxecarts_token", data.token);
     setUser(data.user);
     return data.user;
   };
@@ -95,14 +117,14 @@ export function ShopProvider({ children }) {
   const updateProfile = async (profile) => {
     const { data } = await api.patch("/auth/profile", profile);
     if (!data.user || typeof data.user !== "object") {
-      throw new Error("ShopSphere API response is invalid.");
+      throw new Error("LUXE CARTS API response is invalid.");
     }
     setUser(data.user);
     return data.user;
   };
 
   const logout = (destination = "/") => {
-    localStorage.removeItem("shopsphere_token");
+    localStorage.removeItem("luxecarts_token");
     setUser(null);
     setToast("You’ve been signed out.");
     navigate(typeof destination === "string" ? destination : "/");

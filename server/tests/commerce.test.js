@@ -79,12 +79,20 @@ beforeEach(() => {
 });
 after(async () => { await new Promise((resolve) => server.close(resolve)); mock.restoreAll(); mongoose.connection.readyState = 0; });
 
-test("catalog has 48 unique products, four populated categories and real computed discounts", () => {
-  assert.equal(demoProducts.length, 48);
-  assert.equal(new Set(demoProducts.map((item) => item._id)).size, 48);
-  assert.equal(new Set(demoProducts.map((item) => item.name)).size, 48);
-  for (const category of categories) assert.equal(demoProducts.filter((item) => item.categorySlug === category.slug).length, 12);
-  assert.ok(demoProducts.filter((item) => item.compareAtPrice > item.price).length >= 30);
+test("catalog has 200 unique demo products, 50 per collection and valid prices", () => {
+  assert.equal(demoProducts.length, 200);
+  assert.equal(new Set(demoProducts.map((item) => item._id)).size, 200);
+  assert.equal(new Set(demoProducts.map((item) => item.name)).size, 200);
+  for (const category of categories) assert.equal(demoProducts.filter((item) => item.categorySlug === category.slug).length, 50);
+  assert.ok(demoProducts.filter((item) => item.compareAtPrice > item.price).length >= 120);
+  for (const product of demoProducts) {
+    assert.equal(product.isDemo, true);
+    assert.ok(Number.isFinite(product.price) && product.price > 0);
+    assert.ok(product.compareAtPrice === 0 || product.compareAtPrice > product.price);
+    assert.ok(Number.isInteger(product.stock) && product.stock >= 0);
+    assert.ok(product.rating >= 0 && product.rating <= 5);
+    assert.equal(new URL(product.image).protocol, "https:");
+  }
 });
 test("signature validation rejects tampering, malformed input and a missing secret", () => {
   const signed = hmac("order|payment", "secret");

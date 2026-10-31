@@ -34,13 +34,13 @@ try {
   assert.equal(spa.status, 200);
   assert.match(spa.headers.get("content-type") || "", /text\/html/i);
   console.log("PASS /login: SPA deep link returns HTML");
-  if (process.env.SHOPSPHERE_SMOKE_EMAIL && process.env.SHOPSPHERE_SMOKE_PASSWORD) {
-    const session = await request("/api/auth/login", 200, { method: "POST", body: { email: process.env.SHOPSPHERE_SMOKE_EMAIL, password: process.env.SHOPSPHERE_SMOKE_PASSWORD } });
+  if (process.env.LUXE_CARTS_SMOKE_EMAIL && process.env.LUXE_CARTS_SMOKE_PASSWORD) {
+    const session = await request("/api/auth/login", 200, { method: "POST", body: { email: process.env.LUXE_CARTS_SMOKE_EMAIL, password: process.env.LUXE_CARTS_SMOKE_PASSWORD } });
     assert.ok(session.token);
     const profile = await request("/api/auth/me", 200, { token: session.token });
     assert.equal(profile.user.id, session.user.id);
     console.log("PASS existing-account login and bearer authentication (credentials and token not logged)");
-  } else console.log("SKIP valid-account login: set SHOPSPHERE_SMOKE_EMAIL and SHOPSPHERE_SMOKE_PASSWORD locally to include it.");
+  } else console.log("SKIP valid-account login: set LUXE_CARTS_SMOKE_EMAIL and LUXE_CARTS_SMOKE_PASSWORD locally to include it.");
   console.log("Production API smoke checks passed.");
 } catch (error) {
   console.error("Production is NOT verified:", error.message);

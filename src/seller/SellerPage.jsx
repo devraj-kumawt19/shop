@@ -8,6 +8,7 @@ import { RequireAuth } from "../pages.jsx";
 import SellerCatalog from "./SellerCatalog.jsx";
 import SellerProductEditor from "./SellerProductEditor.jsx";
 import "./seller.css";
+import Brand from "../Brand.jsx";
 
 const sections = { overview: "Overview", catalog: "My catalogs", inventory: "Inventory", help: "Help & support", account: "My account" };
 const menu = [["overview", LayoutDashboard, "Overview"], ["catalog", Package, "My catalogs"], ["inventory", Boxes, "Inventory"]];
@@ -62,7 +63,7 @@ function SellerWorkspace() {
   return <div className="seller-workspace">
     {mobileMenu && <button className="seller-sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobileMenu(false)} />}
     <aside className={`seller-sidebar ${mobileMenu ? "is-open" : ""}`} ref={sidebarRef} role={mobileMenu ? "dialog" : undefined} aria-modal={mobileMenu ? "true" : undefined} aria-label="Seller navigation">
-      <Link className="seller-brand" to="/"><span><Store size={23} /></span><strong>{settings.siteName}<small>SUPPLIER PANEL</small></strong></Link>
+      <Link className="seller-brand" to="/" aria-label={`${settings.siteName} home`}><Brand name={settings.siteName} /></Link>
       <button className="seller-mobile-close seller-icon-button" aria-label="Close navigation" onClick={() => setMobileMenu(false)}><X size={20} /></button>
       <div className="seller-store-badge"><span>{user.name.charAt(0).toUpperCase()}</span><div><strong>{user.name}</strong><small><span />Seller account</small></div><ShieldCheck size={17} /></div>
       <span className="seller-nav-label">MANAGE YOUR BUSINESS</span>

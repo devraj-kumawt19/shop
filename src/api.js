@@ -18,7 +18,7 @@ api.interceptors.request.use((config) => {
   if (apiConfigurationError) {
     return Promise.reject(new Error(apiConfigurationError));
   }
-  const token = localStorage.getItem("shopsphere_token");
+  const token = localStorage.getItem("luxecarts_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -30,14 +30,14 @@ api.interceptors.response.use((response) => {
 });
 
 export function getErrorMessage(error) {
-  if (error.message === apiConfigurationError || error.message === apiResponseError || error.message === "ShopSphere API response is invalid.") return error.message;
+  if (error.message === apiConfigurationError || error.message === apiResponseError || error.message === "LUXE CARTS API response is invalid.") return error.message;
   const responseType = error.response?.headers?.["content-type"] || "";
   if (responseType.toLowerCase().includes("text/html") || typeof error.response?.data === "string" && /^\s*<!doctype html/i.test(error.response.data)) {
     return apiResponseError;
   }
   return error.response?.data?.message || (error.code === "ECONNABORTED"
     ? "The store is taking too long to respond. Please try again."
-    : error.response ? "Something went wrong. Please try again." : "The ShopSphere API is offline. Start the backend to connect to the live store.");
+    : error.response ? "Something went wrong. Please try again." : "The LUXE CARTS API is offline. Start the backend to connect to the live store.");
 }
 
 export default api;

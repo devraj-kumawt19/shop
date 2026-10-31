@@ -1,4 +1,5 @@
 import { toRupees } from "./currency.js";
+import { demoCollections } from "./demoCollections.js";
 export const categories = [
   { name: "Home & Living", slug: "home-living", image: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=900&q=85", tone: "sand" },
   { name: "Tech & Audio", slug: "tech-audio", image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=85", tone: "blue" },
@@ -40,6 +41,30 @@ for (const [slug, finds] of Object.entries(extraFinds)) {
 }
 
 for (const product of demoProducts) {
+  product.isDemo = true;
   product.price = toRupees(product.price);
   product.compareAtPrice = toRupees(product.compareAtPrice);
+}
+
+for (const [slug, families] of Object.entries(demoCollections)) {
+  const category = categories.find(item => item.slug === slug);
+  families.forEach(([family, basePrice, photo, finishes], familyIndex) => {
+    finishes.forEach((finish, finishIndex) => {
+      const price = basePrice + finishIndex * 200;
+      const onSale = familyIndex % 3 !== 2;
+      const name = `${finish} ${family}`;
+      demoProducts.push({
+        _id: `sphere-${String(demoProducts.length + 1).padStart(3, "0")}`,
+        name, category: category.name, categorySlug: slug, price,
+        compareAtPrice: onSale ? Math.ceil(price / (1 - (15 + familyIndex % 4 * 5) / 100) / 100) * 100 - 1 : 0,
+        image: `https://images.unsplash.com/${photo}?auto=format&fit=crop&w=900&q=80`,
+        description: `${name} from our ${category.name} collection. A considered everyday essential in the ${finish.toLowerCase()} edition. Pair it with the rest of the collection for a coordinated look. This is a demo listing; photographs, specifications, prices and reviews are illustrative.`,
+        stock: 8 + (familyIndex * 7 + finishIndex * 3) % 43,
+        rating: Number((4.2 + (familyIndex + finishIndex) % 8 / 10).toFixed(1)),
+        reviewCount: 12 + familyIndex * 9 + finishIndex * 17,
+        badge: onSale ? "SALE" : familyIndex % 2 ? "NEW ARRIVAL" : "THE ESSENTIALS",
+        featured: familyIndex < 3, isDemo: true,
+      });
+    });
+  });
 }

@@ -7,7 +7,7 @@ const dotenv = require('dotenv'), mongoose = require('mongoose'), jwt = require(
 dotenv.config({ path: new URL('../server/.env', import.meta.url), quiet: true });
 const uri = process.env.MONGO_URI;
 if (!uri) throw new Error('No database configured');
-const qaDbName = 'shopsphere_feature_qa_' + randomUUID().replaceAll('-', '').slice(0, 16);
+const qaDbName = 'luxecarts_feature_qa_' + randomUUID().replaceAll('-', '').slice(0, 16);
 for (const key of ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET', 'RESEND_API_KEY', 'RESEND_FROM', 'ORDER_NOTIFICATION_EMAIL', 'OPENAI_API_KEY', 'OPENAI_MODEL', 'SHIPROCKET_TOKEN']) delete process.env[key];
 process.env.JWT_SECRET = 'temporary-qa-' + randomUUID(); process.env.NODE_ENV = 'test'; process.env.PUBLIC_SITE_URL = 'https://shop-sand-gamma.vercel.app';
 let server;
@@ -94,6 +94,6 @@ try {
 } catch (error) { console.error('QA integration failed:', error.name, error.message?.replace(/mongodb[^\s]+/g, '[redacted]')); process.exitCode = 1; }
 finally {
     if (server) await new Promise(resolve => server.close(resolve));
-    if (mongoose.connection.readyState === 1 && mongoose.connection.name === qaDbName && /^shopsphere_feature_qa_[a-f0-9]{16}$/.test(qaDbName)) { try { await mongoose.connection.dropDatabase(); console.log('Removed the isolated QA database.'); } catch { console.error('Could not remove the QA database:', qaDbName); process.exitCode = 1; } }
+    if (mongoose.connection.readyState === 1 && mongoose.connection.name === qaDbName && /^luxecarts_feature_qa_[a-f0-9]{16}$/.test(qaDbName)) { try { await mongoose.connection.dropDatabase(); console.log('Removed the isolated QA database.'); } catch { console.error('Could not remove the QA database:', qaDbName); process.exitCode = 1; } }
     await mongoose.disconnect();
 }

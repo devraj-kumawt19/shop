@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Heart, Search, ShoppingBag, Sparkles, Star, Zap } from "lucide-react";
 import { useMoney, useShop } from "./ShopContext.jsx";
 import { useCategories } from "./hooks/useProducts.js";
+import Brand from "./Brand.jsx";
 
 export function SearchBar({ compact = false, autoFocus = false, onSearch }) {
   const [value, setValue] = useState("");
@@ -19,7 +20,7 @@ export function SearchBar({ compact = false, autoFocus = false, onSearch }) {
     <form className={compact ? "search-form search-compact" : "search-form"} role="search" onSubmit={submit}>
       <Search size={17} strokeWidth={1.7} />
       <input aria-label="Search products" placeholder={compact ? "Search finds..." : "Search for something good..."} autoFocus={autoFocus} value={value} onChange={(event) => setValue(event.target.value)} />
-      {value && <button type="submit" aria-label="Submit search"><ArrowRight size={16} /></button>}
+      <button type="submit" aria-label="Submit search"><ArrowRight size={16} /></button>
     </form>
   );
 }
@@ -83,7 +84,7 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="footer-main">
         <div className="footer-brand">
-          <Link className="brand" to="/"><span className="brand-mark"><Sparkles size={19} /></span><span>{settings.siteName === "ShopSphere" ? <>shop<span>sphere</span></> : settings.siteName}</span></Link>
+          <Link className="brand" to="/" aria-label={`${settings.siteName} home`}><Brand name={settings.siteName} /></Link>
           <p>{settings.footerDescription}</p>
         </div>
         <div className="footer-column"><span className="footer-title">EXPLORE</span><Link to="/products">Shop all</Link>{categories.slice(0, 4).map((category) => <Link key={category.slug} to={`/categories/${category.slug}`}>{category.name}</Link>)}</div>

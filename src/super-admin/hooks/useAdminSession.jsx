@@ -8,7 +8,7 @@ const AdminSession = createContext(null);
 export function AdminSessionProvider({ children }) {
   const { user, refreshUser } = useShop();
   const { pathname } = useLocation();
-  const token = localStorage.getItem("shopsphere_token");
+  const token = localStorage.getItem("luxecarts_token");
   const [revision, setRevision] = useState(0);
   const [session, setSession] = useState({ status: "checking" });
   useEffect(() => {

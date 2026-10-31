@@ -177,6 +177,8 @@ app.get("/api/products", requireDatabase, asyncRoute(async (req, res) => {
   if (sale === "true") filter.$expr = { $gt: ["$compareAtPrice", "$price"] };
   if (typeof search === "string" && search.trim()) filter.$text = { $search: search.trim().slice(0, 100) };
   const sortBy = sort === "price-low" ? { price: 1 } : sort === "price-high" ? { price: -1 } : sort === "rating" ? { rating: -1 } : { featured: -1, createdAt: -1 };
+  // Equal prices and ratings must keep the same order across pagination queries.
+  sortBy._id = 1;
   const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100);
   const page = Math.max(Number(req.query.page) || 1, 1);
   const [products, total] = await Promise.all([
@@ -223,7 +225,7 @@ app.post("/api/orders", requireDatabase, authenticate, asyncRoute(async (req, re
       await reserveCoupon(coupon, req.user.id, orderId, session);
       if (paymentMethod === "wallet") {
         if (products.some((p) => p.isDemo)) throw Object.assign(new Error("Wallet funds cannot be used for sample products."), { status: 400 });
-        if (total > 0) await changeWallet({ user: req.user.id, amountMinor: -Math.round(total * 100), key: `purchase/${orderId}`, kind: "purchase", description: "ShopSphere order", order: orderId }, session);
+        if (total > 0) await changeWallet({ user: req.user.id, amountMinor: -Math.round(total * 100), key: `purchase/${orderId}`, kind: "purchase", description: "LUXE CARTS order", order: orderId }, session);
       }
       if (paymentMethod !== "razorpay") for (const item of orderItems) {
         await changeStock(item, -item.quantity, { session, actor: req.user.id, reason: paymentMethod === "wallet" ? "Wallet order" : "Cash on delivery order", reference: String(orderId) });

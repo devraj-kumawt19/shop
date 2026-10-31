@@ -8,17 +8,17 @@ import api, { getErrorMessage } from "./api.js";
 
 export default function QuickDeliveryPage() {
   const money = useMoney(); const { settings, cart } = useShop(); const navigate = useNavigate();
-  const [pin, setPin] = useState(() => localStorage.getItem("shopsphere_delivery_pin") || ""), [result, setResult] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [pin, setPin] = useState(() => localStorage.getItem("luxecarts_delivery_pin") || ""), [result, setResult] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const catalog = useProducts({ quick: "true", limit: "100" });
   useEffect(() => { document.title = `Quick · 15-minute delivery | ${settings.siteName}`; }, [settings.siteName]);
-  async function check(event) { event.preventDefault(); setBusy(true); setError(""); setResult(null); try { const { data } = await api.get(`/delivery/check?postalCode=${encodeURIComponent(pin)}`); setResult(data); if (data.available) localStorage.setItem("shopsphere_delivery_pin", pin); } catch (error) { setError(getErrorMessage(error)); } finally { setBusy(false); } }
-  function checkout() { localStorage.setItem("shopsphere_delivery_pin", pin); navigate("/checkout", { state: { deliveryMethod: "express15", postalCode: pin } }); }
+  async function check(event) { event.preventDefault(); setBusy(true); setError(""); setResult(null); try { const { data } = await api.get(`/delivery/check?postalCode=${encodeURIComponent(pin)}`); setResult(data); if (data.available) localStorage.setItem("luxecarts_delivery_pin", pin); } catch (error) { setError(getErrorMessage(error)); } finally { setBusy(false); } }
+  function checkout() { localStorage.setItem("luxecarts_delivery_pin", pin); navigate("/checkout", { state: { deliveryMethod: "express15", postalCode: pin } }); }
   return <main id="main-content" className="quick-page"><div className="page-width">
     <div className="breadcrumbs"><Link to="/">Home</Link><ChevronRight size={13} />
-    <span>Quick by ShopSphere</span></div>
+    <span>Quick by LUXE CARTS</span></div>
     <section className="quick-hero"><div className="quick-hero-copy">
       <span className="quick-brand"><span><Zap size={18} fill="currentColor" />
-      </span>quick<small>by ShopSphere</small></span>
+      </span>quick<small>by LUXE CARTS</small></span>
       <span className="quick-hero-kicker">GOOD THINGS DON'T ALWAYS NEED TO WAIT.</span>
       <h1>Your everyday.<br /><span>At your door.</span><br />In <em>15 minutes.</em></h1>
       <p>Your local shelf, a little closer. Selected essentials, carefully packed and delivered in a hurry.</p>

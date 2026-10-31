@@ -13,7 +13,7 @@ export async function startServer() {
   if (process.env.MONGO_URI) await connectDatabase();
   else console.warn("MONGO_URI is missing; only diagnostic API responses will be available.");
   const port = Number(process.env.PORT) || 5000;
-  const server = app.listen(port, () => console.log("ShopSphere API listening on port " + port + "."));
+  const server = app.listen(port, () => console.log("LUXE CARTS API listening on port " + port + "."));
   if (process.env.MONGO_URI) startNotificationWorker();
   return server;
 }

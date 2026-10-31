@@ -10,11 +10,11 @@ import { ShoppingBag } from "lucide-react";
 import { ShopProvider, useShop } from "./ShopContext.jsx";
 import { SiteFooter, StatusMessage } from "./components.jsx";
 import Header from "./Header.jsx";
+import HomePage from "./HomePage.jsx";
 import PageTransition from "./PageTransition.jsx";
-import { useCategories } from "./hooks/useProducts.js";
 import SuperAdminRoutes from "./super-admin/SuperAdminRoutes.jsx";
 import {
-  AuthPage, CartPage, CheckoutPage, HomePage, NotFoundPage,
+  AuthPage, CartPage, CheckoutPage, NotFoundPage,
   OrderDetailsPage, OrdersPage, ProductDetailPage, ProductsPage, ProfilePage, WishlistPage,
 } from "./pages.jsx";
 
@@ -67,15 +67,15 @@ function AppRoutes() {
   const pathname = useLocation().pathname;
   const controlPanel = pathname === "/seller" || pathname === "/super-admin" || pathname.startsWith("/super-admin/") || pathname === "/admin" || pathname.startsWith("/admin/");
   const authPage = pathname === "/login" || pathname === "/register" || pathname === "/seller/register";
-  const { cart, settingsError } = useShop();
+  const { cart, settingsError, refreshSettings } = useShop();
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const showFloatingCart = cartCount > 0 && pathname !== "/cart" && !controlPanel && !authPage;
   return (
-    <>
+    <div className={controlPanel ? undefined : "storefront-shell"}>
       <RouteTracker />
       <a className="skip-link" href="#main-content">Skip to content</a>
       {!controlPanel && !authPage && <Header />}
-      {!controlPanel && !import.meta.env.DEV && settingsError && <div className="page-width app-api-error"><StatusMessage tone="error">{settingsError}</StatusMessage></div>}
+      {!controlPanel && !authPage && settingsError && <div className="page-width app-api-error"><StatusMessage tone="error"><span>Store details couldn't be refreshed. Please try again.</span><button type="button" className="settings-retry-button" onClick={refreshSettings}>Retry</button></StatusMessage></div>}
       <Toast hasFloatingCart={showFloatingCart} />
       {showFloatingCart && <FloatingCart count={cartCount} />}
       {!controlPanel && <ShoppingAssistant />}
@@ -107,7 +107,7 @@ function AppRoutes() {
       </Routes>
       </PageTransition>
       {!controlPanel && !authPage && <SiteFooter />}
-    </>
+    </div>
   );
 }
 

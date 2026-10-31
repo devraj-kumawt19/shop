@@ -76,7 +76,7 @@ export function createCommerceToolsRouter(authenticate, { trackingInput, updateR
     ]);
     if (req.query.format === "csv") {
       const rows = [["Date (UTC)", "Currency", "Orders", "Order value", "Discounts"], ...daily.map((row) => [row._id.date, row._id.currency, row.orders, row.value, row.discounts])];
-      return res.type("text/csv").attachment("shopsphere-sales.csv").send(rows.map((row) => row.map(csvCell).join(",")).join("\r\n"));
+      return res.type("text/csv").attachment("luxecarts-sales.csv").send(rows.map((row) => row.map(csvCell).join(",")).join("\r\n"));
     }
     res.json({ days, daily, bestsellers, abandoned, totals });
   }));

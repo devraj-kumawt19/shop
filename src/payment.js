@@ -36,7 +36,7 @@ export async function payForOrder(orderId) {
     let verifying = false;
     const checkout = new window.Razorpay({
       key: data.key, amount: data.amount, currency: data.currency, name: data.name,
-      description: "Your ShopSphere order", order_id: data.gatewayOrderId, prefill: data.prefill,
+      description: "Your LUXE CARTS order", order_id: data.gatewayOrderId, prefill: data.prefill,
       theme: { color: "#2563eb" },
       handler: async (response) => {
         verifying = true;

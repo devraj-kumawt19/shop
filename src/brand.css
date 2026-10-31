@@ -1,0 +1,22 @@
+.luxe-brand { display: inline-flex; align-items: center; gap: 11px; flex-shrink: 0; line-height: 1; }
+.luxe-brand .luxe-brand-mark { display: block; width: 42px; height: 42px; flex-shrink: 0; }
+.luxe-brand .luxe-brand-wordmark { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; color: #16324f; font-family: "Plus Jakarta Sans", "DM Sans", sans-serif; font-style: normal; }
+.luxe-brand-wordmark > strong { font-size: 21px; font-weight: 750; line-height: 1; letter-spacing: .19em; }
+.luxe-brand-wordmark > span { padding-left: 1px; color: #0f766e; font-size: 9px; font-weight: 650; line-height: 1; letter-spacing: .52em; }
+.store-logo .luxe-brand-wordmark, .footer-brand .luxe-brand-wordmark, .access-brand .luxe-brand-wordmark { color: #16324f; }
+.store-logo { letter-spacing: normal; }
+.control-brand > .luxe-brand, .seller-brand > .luxe-brand { display: inline-flex; width: auto; height: auto; background: none; border-radius: 0; }
+.seller-brand .luxe-brand-wordmark > span { display: block; margin: 0; font-size: 9px; letter-spacing: .52em; }
+.seller-brand .luxe-brand-wordmark > strong { font-size: 19px; letter-spacing: .17em; }
+.control-brand .luxe-brand-mark, .sa-auth-brand .luxe-brand-mark, .supplier-logo .luxe-brand-mark { width: 36px; height: 36px; }
+.control-brand .luxe-brand-wordmark > strong, .sa-auth-brand .luxe-brand-wordmark > strong { font-size: 18px; }
+.sa-auth-brand .luxe-brand-wordmark { color: #fff; }
+.sa-auth-brand .luxe-brand-wordmark > span { color: #8bd5c9; }
+.storefront-shell .footer-brand .brand { letter-spacing: normal; }
+@media (max-width: 700px) {
+  .luxe-brand { gap: 8px; }
+  .luxe-brand .luxe-brand-mark { width: 33px; height: 33px; }
+  .luxe-brand-wordmark > strong { font-size: 18px; letter-spacing: .16em; }
+  .luxe-brand-wordmark > span { font-size: 8px; letter-spacing: .44em; }
+  .luxe-brand .luxe-brand-wordmark { gap: 5px; }
+}

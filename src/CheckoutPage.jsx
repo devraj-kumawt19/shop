@@ -22,7 +22,7 @@ export default function CheckoutPage() {
   const [coupon, setCoupon] = useState(null);
   const [applying, setApplying] = useState(false);
   const [wallet, setWallet] = useState(null);
-  const [postalCode, setPostalCode] = useState(location.state?.postalCode || localStorage.getItem("shopsphere_delivery_pin") || "");
+  const [postalCode, setPostalCode] = useState(location.state?.postalCode || localStorage.getItem("luxecarts_delivery_pin") || "");
   const [deliveryMethod, setDeliveryMethod] = useState("standard");
   const [service, setService] = useState(null);
   const [checkingArea, setCheckingArea] = useState(false);

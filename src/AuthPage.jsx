@@ -6,6 +6,7 @@ import { useShop } from "./ShopContext.jsx";
 import { StatusMessage } from "./components.jsx";
 import { authDestination, validateAuth } from "./authValidation.js";
 import "./auth.css";
+import Brand from "./Brand.jsx";
 
 export default function AuthPage({ mode, seller = false }) {
   const { signIn, settings } = useShop();
@@ -69,7 +70,7 @@ export default function AuthPage({ mode, seller = false }) {
     </div>;
   }
 
-  const brand = <><span className="access-brand-icon"><Sparkles size={20} /></span><span>{settings.siteName === "ShopSphere" ? <>shop<span>sphere</span></> : settings.siteName}</span></>;
+  const brand = <Brand name={settings.siteName} />;
 
   return <main id="main-content" className={`access-page ${isRegister ? "access-register" : "access-login"}`}>
     <header className="access-topbar"><Link className="access-brand" to="/" aria-label={`${settings.siteName} home`}>{brand}</Link><Link className="access-back" to="/"><ArrowLeft size={14} /><span>Back to the shop</span></Link></header>

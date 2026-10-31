@@ -1,6 +1,6 @@
-# ShopSphere
+# LUXE CARTS
 
-ShopSphere is a React/Vite single-page storefront with a separate Express API. Product browsing, search, category filters, cart, wishlist, registration, sign-in, profile details and profile photos, cash-on-delivery checkout, order history, seller listings, and the Super Admin workspace are included. Profile photos are resized to JPEG in the browser and stored on the user's MongoDB record with an 180 KB limit.
+LUXE CARTS is a React/Vite single-page storefront with a separate Express API. Product browsing, search, category filters, cart, wishlist, registration, sign-in, profile details and profile photos, cash-on-delivery checkout, order history, seller listings, and the Super Admin workspace are included. Profile photos are resized to JPEG in the browser and stored on the user's MongoDB record with an 180 KB limit.
 
 ## Requirements
 
@@ -219,7 +219,7 @@ Save the variables, then redeploy the latest commit. Vite replaces frontend vari
 npm run verify:production -- https://shop-sand-gamma.vercel.app
 ```
 
-This requires `/api/health` to return HTTP 200 JSON with `database: "connected"`, verifies catalog JSON, login validation, authentication enforcement, API 404 JSON and the `/login` SPA fallback. To also test a real existing account, set `SHOPSPHERE_SMOKE_EMAIL` and `SHOPSPHERE_SMOKE_PASSWORD` locally before running the script; the credentials and returned token are never logged. The smoke script does not create customers, orders, payments or emails. A working local build or stubbed test suite does not prove that the live API is configured.
+This requires `/api/health` to return HTTP 200 JSON with `database: "connected"`, verifies catalog JSON, login validation, authentication enforcement, API 404 JSON and the `/login` SPA fallback. To also test a real existing account, set `LUXE_CARTS_SMOKE_EMAIL` and `LUXE_CARTS_SMOKE_PASSWORD` locally before running the script; the credentials and returned token are never logged. The smoke script does not create customers, orders, payments or emails. A working local build or stubbed test suite does not prove that the live API is configured.
 
 Reference: [Vite functions on Vercel](https://vercel.com/docs/frameworks/frontend/vite), [Node.js functions](https://vercel.com/docs/functions/runtimes/node-js), [Node.js helper configuration](https://vercel.com/docs/functions/runtimes/node-js/advanced-node-configuration), and [cron authentication](https://vercel.com/docs/cron-jobs/manage-cron-jobs).
 
@@ -237,7 +237,7 @@ The API is mounted at `/api`; `GET /api/health` reports API and database connect
 
 ## Sale, sample catalog, payment and email setup
 
-The preview now includes **48 sample products across four collections**, with computed sale discounts. Sale products appear in a banner, a dedicated homepage section and `/products?sale=true`. Set a product's compare-at price above its selling price to include it in the sale. The super admin can edit the sale text and turn the promotion on or off in Website settings.
+The preview includes **200 sample products across four collections (50 per collection)**, with unique names, INR prices, illustrative images and computed sale discounts. Browse them using search, category filters, sorting and 24-product pagination, including in the local preview when the API is unavailable. Sale products appear in a dedicated homepage section and `/products?sale=true`. Set a product's compare-at price above its selling price to include it in the sale. The super admin can edit the sale text and turn the promotion on or off in Website settings.
 
 To add the sample products to a connected database, run `npm --prefix server run seed`. The seed adds missing products and categories without overwriting existing entries. Sample ratings and reviews are illustrative; seeded sample items are marked as demo products. No fake customers, orders, email delivery or payment success is generated. Test products cannot be charged using live Razorpay keys. Replace their details with actual inventory and remove the demo flag when ready to sell them.
 
@@ -291,7 +291,7 @@ Run `npm test` and `npm run build` before deployment. Automated API checks isola
 Integration references: [OpenAI text generation](https://developers.openai.com/api/docs/guides/text), [Shiprocket AWB tracking](https://www.postman.com/shiprocketdev/shiprocket-dev-s-public-workspace/request/mwbf7qq/get-tracking-through-awb), and [PDFKit fonts](https://pdfkit.org/docs/text.html).
 
 
-For an opt-in check against your configured MongoDB connection, set `RUN_COMMERCE_INTEGRATION=1` locally and run `npm run verify:commerce`. It creates a new randomly named `shopsphere_feature_qa_*` database, runs actual transaction/rollback/concurrent-checkout tests, then removes only that QA database. Existing store data is not modified. The database account must permit creating/removing a separate QA database. No payment, email, courier or AI provider is called. Use a test Atlas account if the normal application account cannot create an isolated database.
+For an opt-in check against your configured MongoDB connection, set `RUN_COMMERCE_INTEGRATION=1` locally and run `npm run verify:commerce`. It creates a new randomly named `luxecarts_feature_qa_*` database, runs actual transaction/rollback/concurrent-checkout tests, then removes only that QA database. Existing store data is not modified. The database account must permit creating/removing a separate QA database. No payment, email, courier or AI provider is called. Use a test Atlas account if the normal application account cannot create an isolated database.
 
 
 ## Shop Wallet, shopping festival and Quick delivery

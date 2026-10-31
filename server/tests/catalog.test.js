@@ -37,8 +37,13 @@ before(async () => {
       limit(value) { queryOptions.limit = value; return this; },
       lean: async () => {
         const results = catalog.filter((product) => matches(product, filter));
-        const [field, direction] = Object.entries(queryOptions.sort || { featured: -1 })[0];
-        results.sort((a, b) => direction * (a[field] < b[field] ? -1 : a[field] > b[field] ? 1 : 0));
+        results.sort((a, b) => {
+          for (const [field, direction] of Object.entries(queryOptions.sort || { featured: -1 })) {
+            const difference = direction * (a[field] < b[field] ? -1 : a[field] > b[field] ? 1 : 0);
+            if (difference) return difference;
+          }
+          return 0;
+        });
         return results.slice(queryOptions.skip, queryOptions.skip + queryOptions.limit);
       },
     };
@@ -71,9 +76,25 @@ test("products API applies category, search, featured, sale, sort and pagination
     $expr: { $gt: ["$compareAtPrice", "$price"] },
     $text: { $search: "lamp" },
   });
-  assert.deepEqual(queryOptions.sort, { price: 1 });
+  assert.deepEqual(queryOptions.sort, { price: 1, _id: 1 });
   assert.equal(queryOptions.skip, 1);
   assert.equal(queryOptions.limit, 1);
+});
+
+test("equal-price products stay on distinct pages when database return order changes", async () => {
+  const original = [...catalog];
+  try {
+    catalog.push(
+      { ...catalog[0], _id: "eeeeeeeeeeeeeeeeeeeeeeee", name: "Ceramic Desk Lamp" },
+      { ...catalog[0], _id: "ffffffffffffffffffffffff", name: "Metal Desk Lamp" },
+    );
+    const first = await (await fetch(`${base}/api/products?category=home&sort=price-low&limit=2&page=1`)).json();
+    catalog.reverse();
+    const second = await (await fetch(`${base}/api/products?category=home&sort=price-low&limit=2&page=2`)).json();
+    const ids = [...first.products, ...second.products].map(product => product._id);
+    assert.equal(new Set(ids).size, 4);
+    assert.deepEqual(ids, ["bbbbbbbbbbbbbbbbbbbbbbbb", "aaaaaaaaaaaaaaaaaaaaaaaa", "eeeeeeeeeeeeeeeeeeeeeeee", "ffffffffffffffffffffffff"]);
+  } finally { catalog.splice(0, catalog.length, ...original); }
 });
 
 test("products and categories endpoints return JSON response envelopes for empty and populated results", async () => {
